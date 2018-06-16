@@ -15,6 +15,18 @@ type TraceOptions struct {
 	QueryParams  bool
 }
 
+// TraceAll has all tracing options enabled.
+var TraceAll = TraceOptions{
+	Transaction:  true,
+	Ping:         true,
+	RowsNext:     true,
+	RowsClose:    true,
+	RowsAffected: true,
+	LastInsertID: true,
+	Query:        true,
+	QueryParams:  true,
+}
+
 // WithOptions sets our ocsql tracing middleware options.
 func WithOptions(options TraceOptions) TraceOption {
 	return func(o *TraceOptions) {

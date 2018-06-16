@@ -4,12 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"errors"
+	"fmt"
 	"io"
+	"strconv"
+	"sync"
 
 	"go.opencensus.io/trace"
 )
 
 var (
+	regMu              sync.Mutex
 	attrMissingContext = trace.StringAttribute("ocsql.warning", "missing upstream context")
 	attrDeprecated     = trace.StringAttribute("ocsql.warning", "database driver uses deprecated features")
 )
@@ -46,6 +51,45 @@ type ocRows struct {
 	parent  driver.Rows
 	ctx     context.Context
 	options TraceOptions
+}
+
+// Register initializes and registers our ocsql wrapped database driver
+// identified by its driverName and using provided TraceOptions. On success it
+// returns the generated driverName to use when calling sql.Open.
+func Register(driverName string, options ...TraceOption) (string, error) {
+	// retrieve the driver implementation we need to wrap with instrumentation
+	db, err := sql.Open(driverName, "")
+	if err != nil {
+		return "", err
+	}
+	dri := db.Driver()
+	if err = db.Close(); err != nil {
+		return "", err
+	}
+
+	regMu.Lock()
+	defer regMu.Unlock()
+
+	// Since we might want to register multiple ocsql drivers to have different
+	// TraceOptions, but potentially the same underlying database driver, we
+	// cycle through available driver names.
+	driverName = "ocsql-" + driverName
+	for i := int64(0); i < 100; i++ {
+		var (
+			found   = false
+			regName = driverName + strconv.FormatInt(i, 10)
+		)
+		for _, name := range sql.Drivers() {
+			if name == regName {
+				found = true
+			}
+		}
+		if !found {
+			sql.Register(driverName, Wrap(dri, options...))
+			return driverName, nil
+		}
+	}
+	return "", errors.New("unable to register driver, all slots have been taken")
 }
 
 // Wrap takes a SQL driver and wraps it with OpenCensus instrumentation.
@@ -94,10 +138,19 @@ func (c ocConn) Ping(ctx context.Context) (err error) {
 func (c ocConn) Exec(query string, args []driver.Value) (res driver.Result, err error) {
 	if exec, ok := c.parent.(driver.Execer); ok {
 		ctx, span := trace.StartSpan(context.Background(), "sql:exec")
-		span.AddAttributes(attrDeprecated)
-		span.AddAttributes(trace.StringAttribute(
-			"ocsql.deprecated", "driver does not support ExecerContext",
-		))
+		attrs := []trace.Attribute{
+			attrDeprecated,
+			trace.StringAttribute(
+				"ocsql.deprecated", "driver does not support ExecerContext",
+			),
+		}
+		if c.options.Query {
+			attrs = append(attrs, trace.StringAttribute("sql.query", query))
+			if c.options.QueryParams {
+				attrs = append(attrs, paramsAttr(args)...)
+			}
+		}
+		span.AddAttributes(attrs...)
 
 		defer func() {
 			setSpanStatus(span, err)
@@ -118,6 +171,16 @@ func (c ocConn) ExecContext(ctx context.Context, query string, args []driver.Nam
 	if execCtx, ok := c.parent.(driver.ExecerContext); ok {
 		var span *trace.Span
 		ctx, span = trace.StartSpan(ctx, "sql:exec")
+		if c.options.Query {
+			attrs := []trace.Attribute{
+				trace.StringAttribute("sql.query", query),
+			}
+			if c.options.QueryParams {
+				attrs = append(attrs, namedParamsAttr(args)...)
+			}
+			span.AddAttributes(attrs...)
+		}
+
 		defer func() {
 			setSpanStatus(span, err)
 			span.End()
@@ -136,10 +199,20 @@ func (c ocConn) ExecContext(ctx context.Context, query string, args []driver.Nam
 func (c ocConn) Query(query string, args []driver.Value) (rows driver.Rows, err error) {
 	if queryer, ok := c.parent.(driver.Queryer); ok {
 		ctx, span := trace.StartSpan(context.Background(), "sql:query")
-		span.AddAttributes(attrDeprecated)
-		span.AddAttributes(trace.StringAttribute(
-			"ocsql.deprecated", "driver does not support QueryerContext",
-		))
+		attrs := []trace.Attribute{
+			attrDeprecated,
+			trace.StringAttribute(
+				"ocsql.deprecated", "driver does not support QueryerContext",
+			),
+		}
+		if c.options.Query {
+			attrs = append(attrs, trace.StringAttribute("sql.query", query))
+			if c.options.QueryParams {
+				attrs = append(attrs, paramsAttr(args)...)
+			}
+		}
+		span.AddAttributes(attrs...)
+
 		defer func() {
 			setSpanStatus(span, err)
 			span.End()
@@ -160,6 +233,16 @@ func (c ocConn) QueryContext(ctx context.Context, query string, args []driver.Na
 	if queryerCtx, ok := c.parent.(driver.QueryerContext); ok {
 		var span *trace.Span
 		ctx, span = trace.StartSpan(ctx, "sql:query")
+		if c.options.Query {
+			attrs := []trace.Attribute{
+				trace.StringAttribute("sql.query", query),
+			}
+			if c.options.QueryParams {
+				attrs = append(attrs, namedParamsAttr(args)...)
+			}
+			span.AddAttributes(attrs...)
+		}
+
 		defer func() {
 			setSpanStatus(span, err)
 			span.End()
@@ -178,6 +261,12 @@ func (c ocConn) QueryContext(ctx context.Context, query string, args []driver.Na
 
 func (c ocConn) Prepare(query string) (stmt driver.Stmt, err error) {
 	_, span := trace.StartSpan(context.Background(), "sql:prepare")
+	attrs := []trace.Attribute{attrMissingContext}
+	if c.options.Query {
+		attrs = append(attrs, trace.StringAttribute("sql.query", query))
+	}
+	span.AddAttributes(attrs...)
+
 	defer func() {
 		setSpanStatus(span, err)
 		span.End()
@@ -201,7 +290,11 @@ func (c *ocConn) Begin() (driver.Tx, error) {
 }
 
 func (c *ocConn) PrepareContext(ctx context.Context, query string) (stmt driver.Stmt, err error) {
-	_, span := trace.StartSpan(ctx, "sql:prepare")
+	var span *trace.Span
+	ctx, span = trace.StartSpan(ctx, "sql:prepare")
+	if c.options.Query {
+		span.AddAttributes(trace.StringAttribute("sql.query", query))
+	}
 	defer func() {
 		setSpanStatus(span, err)
 		span.End()
@@ -339,10 +432,20 @@ func (r ocResult) RowsAffected() (cnt int64, err error) {
 
 func (s ocStmt) Exec(args []driver.Value) (res driver.Result, err error) {
 	_, span := trace.StartSpan(context.Background(), "sql:exec")
-	span.AddAttributes(attrDeprecated)
-	span.AddAttributes(trace.StringAttribute(
-		"ocsql.deprecated", "driver does not support StmtExecContext",
-	))
+	attrs := []trace.Attribute{
+		attrDeprecated,
+		trace.StringAttribute(
+			"ocsql.deprecated", "driver does not support StmtExecContext",
+		),
+	}
+	if s.options.Query {
+		attrs = append(attrs, trace.StringAttribute("sql.query", s.query))
+		if s.options.QueryParams {
+			attrs = append(attrs, paramsAttr(args)...)
+		}
+	}
+	span.AddAttributes(attrs...)
+
 	defer func() {
 		setSpanStatus(span, err)
 		span.End()
@@ -362,10 +465,20 @@ func (s ocStmt) NumInput() int {
 
 func (s ocStmt) Query(args []driver.Value) (rows driver.Rows, err error) {
 	_, span := trace.StartSpan(context.Background(), "sql:query")
-	span.AddAttributes(attrDeprecated)
-	span.AddAttributes(trace.StringAttribute(
-		"ocsql.deprecated", "driver does not support StmtQueryContext",
-	))
+	attrs := []trace.Attribute{
+		attrDeprecated,
+		trace.StringAttribute(
+			"ocsql.deprecated", "driver does not support StmtQueryContext",
+		),
+	}
+	if s.options.Query {
+		attrs = append(attrs, trace.StringAttribute("sql.query", s.query))
+		if s.options.QueryParams {
+			attrs = append(attrs, paramsAttr(args)...)
+		}
+	}
+	span.AddAttributes(attrs...)
+
 	defer func() {
 		setSpanStatus(span, err)
 		span.End()
@@ -378,6 +491,14 @@ func (s ocStmt) Query(args []driver.Value) (rows driver.Rows, err error) {
 func (s ocStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (res driver.Result, err error) {
 	var span *trace.Span
 	ctx, span = trace.StartSpan(ctx, "sql:exec")
+	if s.options.Query {
+		attrs := []trace.Attribute{trace.StringAttribute("sql.query", s.query)}
+		if s.options.QueryParams {
+			attrs = append(attrs, namedParamsAttr(args)...)
+		}
+		span.AddAttributes(attrs...)
+	}
+
 	defer func() {
 		setSpanStatus(span, err)
 		span.End()
@@ -392,6 +513,14 @@ func (s ocStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (res 
 func (s ocStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (rows driver.Rows, err error) {
 	var span *trace.Span
 	ctx, span = trace.StartSpan(ctx, "sql:query")
+	if s.options.Query {
+		attrs := []trace.Attribute{trace.StringAttribute("sql.query", s.query)}
+		if s.options.QueryParams {
+			attrs = append(attrs, namedParamsAttr(args)...)
+		}
+		span.AddAttributes(attrs...)
+	}
+
 	defer func() {
 		setSpanStatus(span, err)
 		span.End()
@@ -466,6 +595,53 @@ func wrapStmt(stmt driver.Stmt, query string, options TraceOptions) driver.Stmt 
 		}{s, s, s}
 	}
 	panic("unreachable")
+}
+
+func paramsAttr(args []driver.Value) []trace.Attribute {
+	attrs := make([]trace.Attribute, 0, len(args))
+	for i, arg := range args {
+		key := "sql.arg" + strconv.Itoa(i)
+		attrs[i] = argToAttr(key, arg)
+	}
+	return attrs
+}
+
+func namedParamsAttr(args []driver.NamedValue) []trace.Attribute {
+	attrs := make([]trace.Attribute, 0, len(args))
+	for i, arg := range args {
+		var key string
+		if arg.Name != "" {
+			key = arg.Name
+		} else {
+			key = "sql.arg." + strconv.Itoa(arg.Ordinal)
+		}
+		attrs[i] = argToAttr(key, arg.Value)
+	}
+	return attrs
+}
+
+func argToAttr(key string, val interface{}) trace.Attribute {
+	switch v := val.(type) {
+	case nil:
+		return trace.StringAttribute(key, "")
+	case int64:
+		return trace.Int64Attribute(key, v)
+	case float64:
+		return trace.StringAttribute(key, fmt.Sprintf("%f", v))
+	case bool:
+		return trace.BoolAttribute(key, v)
+	case []byte:
+		if len(v) > 256 {
+			v = v[0:256]
+		}
+		return trace.StringAttribute(key, fmt.Sprintf("%s", v))
+	default:
+		s := fmt.Sprintf("%v", v)
+		if len(s) > 256 {
+			s = s[0:256]
+		}
+		return trace.StringAttribute(key, s)
+	}
 }
 
 func setSpanStatus(span *trace.Span, err error) {
