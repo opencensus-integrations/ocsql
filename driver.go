@@ -73,7 +73,7 @@ func Register(driverName string, options ...TraceOption) (string, error) {
 	// Since we might want to register multiple ocsql drivers to have different
 	// TraceOptions, but potentially the same underlying database driver, we
 	// cycle through available driver names.
-	driverName = "ocsql-" + driverName
+	driverName = driverName + "-ocsql-"
 	for i := int64(0); i < 100; i++ {
 		var (
 			found   = false
@@ -85,8 +85,8 @@ func Register(driverName string, options ...TraceOption) (string, error) {
 			}
 		}
 		if !found {
-			sql.Register(driverName, Wrap(dri, options...))
-			return driverName, nil
+			sql.Register(regName, Wrap(dri, options...))
+			return regName, nil
 		}
 	}
 	return "", errors.New("unable to register driver, all slots have been taken")
@@ -601,21 +601,21 @@ func paramsAttr(args []driver.Value) []trace.Attribute {
 	attrs := make([]trace.Attribute, 0, len(args))
 	for i, arg := range args {
 		key := "sql.arg" + strconv.Itoa(i)
-		attrs[i] = argToAttr(key, arg)
+		attrs = append(attrs, argToAttr(key, arg))
 	}
 	return attrs
 }
 
 func namedParamsAttr(args []driver.NamedValue) []trace.Attribute {
 	attrs := make([]trace.Attribute, 0, len(args))
-	for i, arg := range args {
+	for _, arg := range args {
 		var key string
 		if arg.Name != "" {
 			key = arg.Name
 		} else {
 			key = "sql.arg." + strconv.Itoa(arg.Ordinal)
 		}
-		attrs[i] = argToAttr(key, arg.Value)
+		attrs = append(attrs, argToAttr(key, arg.Value))
 	}
 	return attrs
 }
