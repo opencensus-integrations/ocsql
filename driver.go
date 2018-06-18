@@ -22,6 +22,8 @@ var (
 // Register initializes and registers our ocsql wrapped database driver
 // identified by its driverName and using provided TraceOptions. On success it
 // returns the generated driverName to use when calling sql.Open.
+// It is possible to register multiple wrappers for the same database driver if
+// needing different TraceOptions for different connections.
 func Register(driverName string, options ...TraceOption) (string, error) {
 	// retrieve the driver implementation we need to wrap with instrumentation
 	db, err := sql.Open(driverName, "")
@@ -38,7 +40,7 @@ func Register(driverName string, options ...TraceOption) (string, error) {
 
 	// Since we might want to register multiple ocsql drivers to have different
 	// TraceOptions, but potentially the same underlying database driver, we
-	// cycle through available driver names.
+	// cycle through to find available driver names.
 	driverName = driverName + "-ocsql-"
 	for i := int64(0); i < 100; i++ {
 		var (
