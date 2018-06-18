@@ -1,4 +1,9 @@
 # ocsql
+
+[![Go Report Card](https://goreportcard.com/badge/github.com/basvanbeek/ocsql)](https://goreportcard.com/report/github.com/basvanbeek/ocsql)
+[![GoDoc](https://godoc.org/github.com/basvanbeek/ocsql?status.svg)](https://godoc.org/github.com/basvanbeek/ocsql)
+[![Sourcegraph](https://sourcegraph.com/github.com/basvanbeek/ocsql/-/badge.svg)](https://sourcegraph.com/github.com/basvanbeek/ocsql?badge)
+
 OpenCensus SQL database driver wrapper.
 
 Add an ocsql wrapper to your existing database code to instrument the
