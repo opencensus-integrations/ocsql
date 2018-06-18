@@ -19,40 +19,6 @@ var (
 	attrDeprecated     = trace.StringAttribute("ocsql.warning", "database driver uses deprecated features")
 )
 
-type ocDriver struct {
-	parent  driver.Driver
-	options TraceOptions
-}
-
-type ocConn struct {
-	parent  driver.Conn
-	options TraceOptions
-}
-
-type ocTx struct {
-	parent  driver.Tx
-	ctx     context.Context
-	options TraceOptions
-}
-
-type ocStmt struct {
-	parent  driver.Stmt
-	query   string
-	options TraceOptions
-}
-
-type ocResult struct {
-	parent  driver.Result
-	ctx     context.Context
-	options TraceOptions
-}
-
-type ocRows struct {
-	parent  driver.Rows
-	ctx     context.Context
-	options TraceOptions
-}
-
 // Register initializes and registers our ocsql wrapped database driver
 // identified by its driverName and using provided TraceOptions. On success it
 // returns the generated driverName to use when calling sql.Open.
@@ -104,12 +70,24 @@ func Wrap(d driver.Driver, options ...TraceOption) driver.Driver {
 	return ocDriver{parent: d, options: o}
 }
 
+// ocDriver implements driver.Driver
+type ocDriver struct {
+	parent  driver.Driver
+	options TraceOptions
+}
+
 func (d ocDriver) Open(name string) (driver.Conn, error) {
 	c, err := d.parent.Open(name)
 	if err != nil {
 		return nil, err
 	}
 	return &ocConn{parent: c, options: d.options}, nil
+}
+
+// ocConn implements driver.Conn
+type ocConn struct {
+	parent  driver.Conn
+	options TraceOptions
 }
 
 func (c ocConn) Ping(ctx context.Context) (err error) {
@@ -395,52 +373,11 @@ func (c *ocConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx,
 	return ocTx{parent: tx, ctx: ctx}, nil
 }
 
-func (t ocTx) Commit() (err error) {
-	if t.options.Transaction {
-		defer func() {
-			if span := trace.FromContext(t.ctx); span != nil {
-				span.SetStatus(trace.Status{Code: trace.StatusCodeOK})
-				setSpanStatus(span, err)
-				span.End()
-			}
-		}()
-	}
-
-	_, span := trace.StartSpan(t.ctx, "sql:commit")
-	defer func() {
-		setSpanStatus(span, err)
-		span.End()
-	}()
-
-	err = t.parent.Commit()
-	return
-}
-
-func (t ocTx) Rollback() (err error) {
-	if t.options.Transaction {
-		defer func() {
-			if span := trace.FromContext(t.ctx); span != nil {
-				if err == nil {
-					span.SetStatus(trace.Status{
-						Code:    trace.StatusCodeAborted,
-						Message: "transaction rollback",
-					})
-				} else {
-					setSpanStatus(span, err)
-				}
-				span.End()
-			}
-		}()
-	}
-
-	_, span := trace.StartSpan(t.ctx, "sql:rollback")
-	defer func() {
-		setSpanStatus(span, err)
-		span.End()
-	}()
-
-	err = t.parent.Rollback()
-	return
+// ocResult implements driver.Result
+type ocResult struct {
+	parent  driver.Result
+	ctx     context.Context
+	options TraceOptions
 }
 
 func (r ocResult) LastInsertId() (id int64, err error) {
@@ -467,6 +404,13 @@ func (r ocResult) RowsAffected() (cnt int64, err error) {
 
 	cnt, err = r.parent.RowsAffected()
 	return
+}
+
+// ocStmt implements driver.Stmt
+type ocStmt struct {
+	parent  driver.Stmt
+	query   string
+	options TraceOptions
 }
 
 func (s ocStmt) Exec(args []driver.Value) (res driver.Result, err error) {
@@ -616,6 +560,13 @@ func (s ocStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (row
 	return
 }
 
+// ocRows implements driver.Rows.
+type ocRows struct {
+	parent  driver.Rows
+	ctx     context.Context
+	options TraceOptions
+}
+
 func (r ocRows) Columns() []string {
 	return r.parent.Columns()
 }
@@ -648,6 +599,61 @@ func (r ocRows) Next(dest []driver.Value) (err error) {
 	}
 
 	err = r.parent.Next(dest)
+	return
+}
+
+// ocTx implemens driver.Tx
+type ocTx struct {
+	parent  driver.Tx
+	ctx     context.Context
+	options TraceOptions
+}
+
+func (t ocTx) Commit() (err error) {
+	if t.options.Transaction {
+		defer func() {
+			if span := trace.FromContext(t.ctx); span != nil {
+				span.SetStatus(trace.Status{Code: trace.StatusCodeOK})
+				setSpanStatus(span, err)
+				span.End()
+			}
+		}()
+	}
+
+	_, span := trace.StartSpan(t.ctx, "sql:commit")
+	defer func() {
+		setSpanStatus(span, err)
+		span.End()
+	}()
+
+	err = t.parent.Commit()
+	return
+}
+
+func (t ocTx) Rollback() (err error) {
+	if t.options.Transaction {
+		defer func() {
+			if span := trace.FromContext(t.ctx); span != nil {
+				if err == nil {
+					span.SetStatus(trace.Status{
+						Code:    trace.StatusCodeAborted,
+						Message: "transaction rollback",
+					})
+				} else {
+					setSpanStatus(span, err)
+				}
+				span.End()
+			}
+		}()
+	}
+
+	_, span := trace.StartSpan(t.ctx, "sql:rollback")
+	defer func() {
+		setSpanStatus(span, err)
+		span.End()
+	}()
+
+	err = t.parent.Rollback()
 	return
 }
 
