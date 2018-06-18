@@ -32,8 +32,9 @@ if err != nil {
 db, err = sql.Open(driverName, "resource.db")
 ```
 
-If not wanting to use the named driver magic used by ocsql.Register, an
-alternative way to bootstrap the ocsql wrapper exists.
+A more explicit and alternative way to bootstrap the ocsql wrapper exists as
+shown below. This will only work if the actual database driver has its driver
+implementation exported.
 
 Example:
 ```go
