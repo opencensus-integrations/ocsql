@@ -113,7 +113,7 @@ func (d ocDriver) Open(name string) (driver.Conn, error) {
 }
 
 func (c ocConn) Ping(ctx context.Context) (err error) {
-	if c.options.Ping {
+	if c.options.Ping && (c.options.AllowRoot || trace.FromContext(ctx) != nil) {
 		var span *trace.Span
 		ctx, span = trace.StartSpan(ctx, "sql:ping")
 		defer func() {
@@ -137,6 +137,10 @@ func (c ocConn) Ping(ctx context.Context) (err error) {
 
 func (c ocConn) Exec(query string, args []driver.Value) (res driver.Result, err error) {
 	if exec, ok := c.parent.(driver.Execer); ok {
+		if !c.options.AllowRoot {
+			return exec.Exec(query, args)
+		}
+
 		ctx, span := trace.StartSpan(context.Background(), "sql:exec")
 		attrs := []trace.Attribute{
 			attrDeprecated,
@@ -169,8 +173,17 @@ func (c ocConn) Exec(query string, args []driver.Value) (res driver.Result, err 
 
 func (c ocConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (res driver.Result, err error) {
 	if execCtx, ok := c.parent.(driver.ExecerContext); ok {
+		parentSpan := trace.FromContext(ctx)
+		if !c.options.AllowRoot && parentSpan == nil {
+			return execCtx.ExecContext(ctx, query, args)
+		}
+
 		var span *trace.Span
-		ctx, span = trace.StartSpan(ctx, "sql:exec")
+		if parentSpan == nil {
+			ctx, span = trace.StartSpan(ctx, "sql:exec")
+		} else {
+			_, span = trace.StartSpan(ctx, "sql:exec")
+		}
 		if c.options.Query {
 			attrs := []trace.Attribute{
 				trace.StringAttribute("sql.query", query),
@@ -198,6 +211,10 @@ func (c ocConn) ExecContext(ctx context.Context, query string, args []driver.Nam
 
 func (c ocConn) Query(query string, args []driver.Value) (rows driver.Rows, err error) {
 	if queryer, ok := c.parent.(driver.Queryer); ok {
+		if !c.options.AllowRoot {
+			return queryer.Query(query, args)
+		}
+
 		ctx, span := trace.StartSpan(context.Background(), "sql:query")
 		attrs := []trace.Attribute{
 			attrDeprecated,
@@ -231,8 +248,17 @@ func (c ocConn) Query(query string, args []driver.Value) (rows driver.Rows, err 
 
 func (c ocConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (rows driver.Rows, err error) {
 	if queryerCtx, ok := c.parent.(driver.QueryerContext); ok {
+		parentSpan := trace.FromContext(ctx)
+		if !c.options.AllowRoot && parentSpan == nil {
+			return queryerCtx.QueryContext(ctx, query, args)
+		}
+
 		var span *trace.Span
-		ctx, span = trace.StartSpan(ctx, "sql:query")
+		if parentSpan == nil {
+			ctx, span = trace.StartSpan(ctx, "sql:query")
+		} else {
+			_, span = trace.StartSpan(ctx, "sql:query")
+		}
 		if c.options.Query {
 			attrs := []trace.Attribute{
 				trace.StringAttribute("sql.query", query),
@@ -260,17 +286,19 @@ func (c ocConn) QueryContext(ctx context.Context, query string, args []driver.Na
 }
 
 func (c ocConn) Prepare(query string) (stmt driver.Stmt, err error) {
-	_, span := trace.StartSpan(context.Background(), "sql:prepare")
-	attrs := []trace.Attribute{attrMissingContext}
-	if c.options.Query {
-		attrs = append(attrs, trace.StringAttribute("sql.query", query))
-	}
-	span.AddAttributes(attrs...)
+	if c.options.AllowRoot {
+		_, span := trace.StartSpan(context.Background(), "sql:prepare")
+		attrs := []trace.Attribute{attrMissingContext}
+		if c.options.Query {
+			attrs = append(attrs, trace.StringAttribute("sql.query", query))
+		}
+		span.AddAttributes(attrs...)
 
-	defer func() {
-		setSpanStatus(span, err)
-		span.End()
-	}()
+		defer func() {
+			setSpanStatus(span, err)
+			span.End()
+		}()
+	}
 
 	stmt, err = c.parent.Prepare(query)
 	if err != nil {
@@ -291,19 +319,23 @@ func (c *ocConn) Begin() (driver.Tx, error) {
 
 func (c *ocConn) PrepareContext(ctx context.Context, query string) (stmt driver.Stmt, err error) {
 	var span *trace.Span
-	ctx, span = trace.StartSpan(ctx, "sql:prepare")
-	if c.options.Query {
-		span.AddAttributes(trace.StringAttribute("sql.query", query))
+	if c.options.AllowRoot || trace.FromContext(ctx) != nil {
+		ctx, span = trace.StartSpan(ctx, "sql:prepare")
+		if c.options.Query {
+			span.AddAttributes(trace.StringAttribute("sql.query", query))
+		}
+		defer func() {
+			setSpanStatus(span, err)
+			span.End()
+		}()
 	}
-	defer func() {
-		setSpanStatus(span, err)
-		span.End()
-	}()
 
 	if prepCtx, ok := c.parent.(driver.ConnPrepareContext); ok {
 		stmt, err = prepCtx.PrepareContext(ctx, query)
 	} else {
-		span.AddAttributes(attrMissingContext)
+		if span != nil {
+			span.AddAttributes(attrMissingContext)
+		}
 		stmt, err = c.parent.Prepare(query)
 	}
 	if err != nil {
@@ -315,6 +347,13 @@ func (c *ocConn) PrepareContext(ctx context.Context, query string) (stmt driver.
 }
 
 func (c *ocConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+	if !c.options.AllowRoot && trace.FromContext(ctx) == nil {
+		if connBeginTx, ok := c.parent.(driver.ConnBeginTx); ok {
+			return connBeginTx.BeginTx(ctx, opts)
+		}
+		return c.parent.Begin()
+	}
+
 	if c.options.Transaction {
 		if ctx == nil || ctx == context.TODO() {
 			var appSpan *trace.Span
@@ -431,7 +470,11 @@ func (r ocResult) RowsAffected() (cnt int64, err error) {
 }
 
 func (s ocStmt) Exec(args []driver.Value) (res driver.Result, err error) {
-	_, span := trace.StartSpan(context.Background(), "sql:exec")
+	if !s.options.AllowRoot {
+		return s.parent.Exec(args)
+	}
+
+	ctx, span := trace.StartSpan(context.Background(), "sql:exec")
 	attrs := []trace.Attribute{
 		attrDeprecated,
 		trace.StringAttribute(
@@ -452,6 +495,11 @@ func (s ocStmt) Exec(args []driver.Value) (res driver.Result, err error) {
 	}()
 
 	res, err = s.parent.Exec(args)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err = ocResult{parent: res, ctx: ctx, options: s.options}, nil
 	return
 }
 
@@ -464,7 +512,11 @@ func (s ocStmt) NumInput() int {
 }
 
 func (s ocStmt) Query(args []driver.Value) (rows driver.Rows, err error) {
-	_, span := trace.StartSpan(context.Background(), "sql:query")
+	if !s.options.AllowRoot {
+		return s.parent.Query(args)
+	}
+
+	ctx, span := trace.StartSpan(context.Background(), "sql:query")
 	attrs := []trace.Attribute{
 		attrDeprecated,
 		trace.StringAttribute(
@@ -485,12 +537,26 @@ func (s ocStmt) Query(args []driver.Value) (rows driver.Rows, err error) {
 	}()
 
 	rows, err = s.parent.Query(args)
+	if err != nil {
+		return nil, err
+	}
+	rows, err = ocRows{parent: rows, ctx: ctx, options: s.options}, nil
 	return
 }
 
 func (s ocStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (res driver.Result, err error) {
+	parentSpan := trace.FromContext(ctx)
+	if !s.options.AllowRoot && parentSpan == nil {
+		// we already tested driver to implement StmtExecContext
+		return s.parent.(driver.StmtExecContext).ExecContext(ctx, args)
+	}
+
 	var span *trace.Span
-	ctx, span = trace.StartSpan(ctx, "sql:exec")
+	if parentSpan == nil {
+		ctx, span = trace.StartSpan(ctx, "sql:exec")
+	} else {
+		_, span = trace.StartSpan(ctx, "sql:exec")
+	}
 	if s.options.Query {
 		attrs := []trace.Attribute{trace.StringAttribute("sql.query", s.query)}
 		if s.options.QueryParams {
@@ -507,12 +573,26 @@ func (s ocStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (res 
 	// we already tested driver to implement StmtExecContext
 	execContext := s.parent.(driver.StmtExecContext)
 	res, err = execContext.ExecContext(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	res, err = ocResult{parent: res, ctx: ctx, options: s.options}, nil
 	return
 }
 
 func (s ocStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (rows driver.Rows, err error) {
+	parentSpan := trace.FromContext(ctx)
+	if !s.options.AllowRoot && parentSpan == nil {
+		// we already tested driver to implement StmtQueryContext
+		return s.parent.(driver.StmtQueryContext).QueryContext(ctx, args)
+	}
+
 	var span *trace.Span
-	ctx, span = trace.StartSpan(ctx, "sql:query")
+	if parentSpan == nil {
+		ctx, span = trace.StartSpan(ctx, "sql:query")
+	} else {
+		_, span = trace.StartSpan(ctx, "sql:query")
+	}
 	if s.options.Query {
 		attrs := []trace.Attribute{trace.StringAttribute("sql.query", s.query)}
 		if s.options.QueryParams {
@@ -529,6 +609,10 @@ func (s ocStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (row
 	// we already tested driver to implement StmtQueryContext
 	queryContext := s.parent.(driver.StmtQueryContext)
 	rows, err = queryContext.QueryContext(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	rows, err = ocRows{parent: rows, ctx: ctx, options: s.options}, nil
 	return
 }
 

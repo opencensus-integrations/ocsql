@@ -5,6 +5,7 @@ type TraceOption func(o *TraceOptions)
 
 // TraceOptions holds configuration of our ocsql tracing middleware.
 type TraceOptions struct {
+	AllowRoot    bool
 	Transaction  bool
 	Ping         bool
 	RowsNext     bool
@@ -17,6 +18,7 @@ type TraceOptions struct {
 
 // TraceAll has all tracing options enabled.
 var TraceAll = TraceOptions{
+	AllowRoot:    true,
 	Transaction:  true,
 	Ping:         true,
 	RowsNext:     true,
@@ -27,14 +29,24 @@ var TraceAll = TraceOptions{
 	QueryParams:  true,
 }
 
-// WithOptions sets our ocsql tracing middleware options.
+// WithOptions sets our ocsql tracing middleware options through a single
+// TraceOptions object.
 func WithOptions(options TraceOptions) TraceOption {
 	return func(o *TraceOptions) {
 		*o = options
 	}
 }
 
-// WithTransaction enables / disables tracing of transaction spans
+// WithAllowRoot when set to true will allow ocsql to create root spans. If
+// no context is provided to (the majority) of database/sql commands this will
+// result in many single span traces.
+func WithAllowRoot(b bool) TraceOption {
+	return func(o *TraceOptions) {
+		o.AllowRoot = b
+	}
+}
+
+// WithTransaction enables / disables creation of transaction spans.
 func WithTransaction(b bool) TraceOption {
 	return func(o *TraceOptions) {
 		o.Transaction = b
