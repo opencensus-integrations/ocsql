@@ -342,7 +342,7 @@ func (c *ocConn) PrepareContext(ctx context.Context, query string) (stmt driver.
 		return nil, err
 	}
 
-	stmt = ocStmt{parent: stmt, query: query, options: c.options}
+	stmt = wrapStmt(stmt, query, c.options)
 	return
 }
 
