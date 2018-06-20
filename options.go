@@ -50,8 +50,15 @@ type TraceOptions struct {
 	QueryParams bool
 }
 
-// TraceAll has all tracing options enabled.
-var TraceAll = TraceOptions{
+// WithAllTraceOptions enables all available trace options.
+func WithAllTraceOptions() TraceOption {
+	return func(o *TraceOptions) {
+		*o = AllTraceOptions
+	}
+}
+
+// AllTraceOptions has all tracing options enabled.
+var AllTraceOptions = TraceOptions{
 	AllowRoot:    true,
 	Transaction:  true,
 	Ping:         true,
