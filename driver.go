@@ -334,16 +334,6 @@ func (c *ocConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx,
 		return c.parent.Begin()
 	}
 
-	if c.options.Transaction {
-		if ctx == nil || ctx == context.TODO() {
-			var appSpan *trace.Span
-			ctx, appSpan = trace.StartSpan(context.Background(), "sql:transaction")
-			appSpan.AddAttributes(attrMissingContext)
-		} else {
-			ctx, _ = trace.StartSpan(ctx, "sql:transaction")
-		}
-	}
-
 	var span *trace.Span
 	if ctx == nil || ctx == context.TODO() {
 		ctx = context.Background()
@@ -612,16 +602,6 @@ type ocTx struct {
 }
 
 func (t ocTx) Commit() (err error) {
-	if t.options.Transaction {
-		defer func() {
-			if span := trace.FromContext(t.ctx); span != nil {
-				span.SetStatus(trace.Status{Code: trace.StatusCodeOK})
-				setSpanStatus(span, err)
-				span.End()
-			}
-		}()
-	}
-
 	_, span := trace.StartSpan(t.ctx, "sql:commit")
 	defer func() {
 		setSpanStatus(span, err)
@@ -633,22 +613,6 @@ func (t ocTx) Commit() (err error) {
 }
 
 func (t ocTx) Rollback() (err error) {
-	if t.options.Transaction {
-		defer func() {
-			if span := trace.FromContext(t.ctx); span != nil {
-				if err == nil {
-					span.SetStatus(trace.Status{
-						Code:    trace.StatusCodeAborted,
-						Message: "transaction rollback",
-					})
-				} else {
-					setSpanStatus(span, err)
-				}
-				span.End()
-			}
-		}()
-	}
-
 	_, span := trace.StartSpan(t.ctx, "sql:rollback")
 	defer func() {
 		setSpanStatus(span, err)

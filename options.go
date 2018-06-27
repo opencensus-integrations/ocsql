@@ -14,11 +14,6 @@ type TraceOptions struct {
 	// in context or when using methods not taking context.
 	AllowRoot bool
 
-	// Transaction, if set to true, will create spans for the duration of db
-	// transactions. All spans created by the transaction's scoped queries will
-	// become children of the transaction span.
-	Transaction bool
-
 	// Ping, if set to true, will enable the creation of spans on Ping requests.
 	Ping bool
 
@@ -60,7 +55,6 @@ func WithAllTraceOptions() TraceOption {
 // AllTraceOptions has all tracing options enabled.
 var AllTraceOptions = TraceOptions{
 	AllowRoot:    true,
-	Transaction:  true,
 	Ping:         true,
 	RowsNext:     true,
 	RowsClose:    true,
@@ -85,15 +79,6 @@ func WithOptions(options TraceOptions) TraceOption {
 func WithAllowRoot(b bool) TraceOption {
 	return func(o *TraceOptions) {
 		o.AllowRoot = b
-	}
-}
-
-// WithTransaction if set to true, will create spans for the duration of db
-// transactions. All spans created by the transaction's scoped queries will
-// become children of the transaction span.
-func WithTransaction(b bool) TraceOption {
-	return func(o *TraceOptions) {
-		o.Transaction = b
 	}
 }
 
