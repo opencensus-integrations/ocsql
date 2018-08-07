@@ -1,5 +1,9 @@
 package ocsql
 
+import (
+	"go.opencensus.io/trace"
+)
+
 // TraceOption allows for managing ocsql configuration using functional options.
 type TraceOption func(o *TraceOptions)
 
@@ -43,6 +47,9 @@ type TraceOptions struct {
 	// parameters recorded with respect to security.
 	// This setting is a noop if the Query option is set to false.
 	QueryParams bool
+
+	// DefaultAttributes will be set to each span as default.
+	DefaultAttributes []trace.Attribute
 }
 
 // WithAllTraceOptions enables all available trace options.
@@ -137,5 +144,12 @@ func WithQuery(b bool) TraceOption {
 func WithQueryParams(b bool) TraceOption {
 	return func(o *TraceOptions) {
 		o.QueryParams = b
+	}
+}
+
+// WithDefaultAttributes will be set to each span as default.
+func WithDefaultAttributes(attrs ...trace.Attribute) TraceOption {
+	return func(o *TraceOptions) {
+		o.DefaultAttributes = append(o.DefaultAttributes, attrs...)
 	}
 }
