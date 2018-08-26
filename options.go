@@ -150,6 +150,6 @@ func WithQueryParams(b bool) TraceOption {
 // WithDefaultAttributes will be set to each span as default.
 func WithDefaultAttributes(attrs ...trace.Attribute) TraceOption {
 	return func(o *TraceOptions) {
-		o.DefaultAttributes = append(o.DefaultAttributes, attrs...)
+		o.DefaultAttributes = attrs
 	}
 }
