@@ -1,8 +1,8 @@
 # ocsql
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/basvanbeek/ocsql)](https://goreportcard.com/report/github.com/basvanbeek/ocsql)
-[![GoDoc](https://godoc.org/github.com/basvanbeek/ocsql?status.svg)](https://godoc.org/github.com/basvanbeek/ocsql)
-[![Sourcegraph](https://sourcegraph.com/github.com/basvanbeek/ocsql/-/badge.svg)](https://sourcegraph.com/github.com/basvanbeek/ocsql?badge)
+[![Go Report Card](https://goreportcard.com/badge/github.com/opencensus-integrations/ocsql)](https://goreportcard.com/report/github.com/opencensus-integrations/ocsql)
+[![GoDoc](https://godoc.org/github.com/opencensus-integrations/ocsql?status.svg)](https://godoc.org/github.com/opencensus-integrations/ocsql)
+[![Sourcegraph](https://sourcegraph.com/github.com/opencensus-integrations/ocsql/-/badge.svg)](https://sourcegraph.com/github.com/opencensus-integrations/ocsql?badge)
 
 OpenCensus SQL database driver wrapper.
 
@@ -17,8 +17,8 @@ driver as shown below.
 Example:
 ```go
 import (
-    "github.com/basvanbeek/ocsql"
     _ "github.com/mattn/go-sqlite3"
+    "github.com/opencensus-integrations/ocsql"
 )
 
 var (
@@ -44,8 +44,8 @@ implementation exported.
 Example:
 ```go
 import (
-    "github.com/basvanbeek/ocsql"
     sqlite3 "github.com/mattn/go-sqlite3"
+    "github.com/opencensus-integrations/ocsql"
 )
 
 var (
