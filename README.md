@@ -64,6 +64,33 @@ sql.Register("ocsql-sqlite3", driver)
 db, err = sql.Open("ocsql-sqlite3", "resource.db")
 ```
 
+## jmoiron/sqlx
+
+If using the `sqlx` library with named queries you will need to use the
+`sqlx.NewDb` function to wrap an existing `*sql.DB` connection. Do not use the
+`sqlx.Open` and `sqlx.Connect` methods.
+`sqlx` uses the driver name to figure out which database is being used. It uses
+this knowledge to convert named queries to the correct bind type (dollar sign,
+question mark) if named queries are not supported natively by the
+database. Since ocsql creates a new driver name it will not be recognized by
+sqlx and named queries will fail.
+
+Use one of the above methods to first create a `*sql.DB` connection and then
+create a `*sqlx.DB` connection by wrapping the `*sql.DB` like this:
+
+```go
+    // Register our ocsql wrapper for the provided Postgres driver.
+    driverName, err := ocsql.Register("postgres", ocsql.WithAllTraceOptions())
+    if err != nil { ... }
+
+    // Connect to a Postgres database using the ocsql driver wrapper.
+    db, err := sql.Open(driverName, "postgres://localhost:5432/my_database")
+    if err != nil { ... }
+
+    // Wrap our *sql.DB with sqlx. use the original db driver name!!!
+    dbx := sqlx.NewDB(db, "postgres")
+```
+
 ## context
 
 To really take advantage of ocsql, all database calls should be made using the
