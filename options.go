@@ -76,6 +76,9 @@ var AllTraceOptions = TraceOptions{
 func WithOptions(options TraceOptions) TraceOption {
 	return func(o *TraceOptions) {
 		*o = options
+		o.DefaultAttributes = append(
+			[]trace.Attribute(nil), options.DefaultAttributes...,
+		)
 	}
 }
 

@@ -69,13 +69,7 @@ func Wrap(d driver.Driver, options ...TraceOption) driver.Driver {
 	if o.QueryParams && !o.Query {
 		o.QueryParams = false
 	}
-	return ocDriver{parent: d, options: o}
-}
-
-// ocDriver implements driver.Driver
-type ocDriver struct {
-	parent  driver.Driver
-	options TraceOptions
+	return wrapDriver(d, o)
 }
 
 func (d ocDriver) Open(name string) (driver.Conn, error) {
@@ -83,7 +77,7 @@ func (d ocDriver) Open(name string) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ocConn{parent: c, options: d.options}, nil
+	return wrapConn(c, d.options), nil
 }
 
 // ocConn implements driver.Conn
@@ -669,36 +663,6 @@ func (t ocTx) Rollback() (err error) {
 	return
 }
 
-func wrapStmt(stmt driver.Stmt, query string, options TraceOptions) driver.Stmt {
-	s := ocStmt{parent: stmt, query: query, options: options}
-	_, hasExeCtx := stmt.(driver.StmtExecContext)
-	_, hasQryCtx := stmt.(driver.StmtQueryContext)
-
-	switch {
-	case !hasExeCtx && !hasQryCtx:
-		return struct {
-			driver.Stmt
-		}{s}
-	case !hasExeCtx && hasQryCtx:
-		return struct {
-			driver.Stmt
-			driver.StmtQueryContext
-		}{s, s}
-	case hasExeCtx && !hasQryCtx:
-		return struct {
-			driver.Stmt
-			driver.StmtExecContext
-		}{s, s}
-	case hasExeCtx && hasQryCtx:
-		return struct {
-			driver.Stmt
-			driver.StmtExecContext
-			driver.StmtQueryContext
-		}{s, s, s}
-	}
-	panic("unreachable")
-}
-
 func paramsAttr(args []driver.Value) []trace.Attribute {
 	attrs := make([]trace.Attribute, 0, len(args))
 	for i, arg := range args {
@@ -759,7 +723,7 @@ func setSpanStatus(span *trace.Span, err error) {
 		status.Code = trace.StatusCodeDeadlineExceeded
 	case sql.ErrNoRows:
 		status.Code = trace.StatusCodeNotFound
-	case sql.ErrTxDone, sql.ErrConnDone:
+	case sql.ErrTxDone, ErrConnDone:
 		status.Code = trace.StatusCodeFailedPrecondition
 	default:
 		status.Code = trace.StatusCodeUnknown
