@@ -26,7 +26,7 @@ func wrapConn(c driver.Conn, options TraceOptions) driver.Conn {
 	conn := &ocConn{parent: c, options: options}
 	if hasNameValueChecker {
 		return struct {
-			driver.Conn
+			connTx
 			driver.NamedValueChecker
 		}{conn, n}
 	}

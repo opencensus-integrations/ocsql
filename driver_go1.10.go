@@ -10,6 +10,9 @@ import (
 
 var ErrConnDone = sql.ErrConnDone
 
+// Compile time assertion
+var _ driver.DriverContext = &ocDriver{}
+
 // ocDriver implements driver.Driver
 type ocDriver struct {
 	parent    driver.Driver
@@ -35,17 +38,17 @@ func wrapConn(parent driver.Conn, options TraceOptions) driver.Conn {
 		return c
 	case hasNameValueChecker && !hasSessionResetter:
 		return struct {
-			driver.Conn
+			connTx
 			driver.NamedValueChecker
 		}{c, n}
 	case !hasNameValueChecker && hasSessionResetter:
 		return struct {
-			driver.Conn
+			connTx
 			driver.SessionResetter
 		}{c, s}
 	case hasNameValueChecker && hasSessionResetter:
 		return struct {
-			driver.Conn
+			connTx
 			driver.NamedValueChecker
 			driver.SessionResetter
 		}{c, n, s}

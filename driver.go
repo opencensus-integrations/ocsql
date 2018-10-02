@@ -13,10 +13,22 @@ import (
 	"go.opencensus.io/trace"
 )
 
+type connTx interface {
+	driver.Conn
+	driver.ConnBeginTx
+	driver.ConnPrepareContext
+}
+
 var (
 	regMu              sync.Mutex
 	attrMissingContext = trace.StringAttribute("ocsql.warning", "missing upstream context")
 	attrDeprecated     = trace.StringAttribute("ocsql.warning", "database driver uses deprecated features")
+
+	// Compile time assertions
+	_ driver.Driver = &ocDriver{}
+	_ connTx        = &ocConn{}
+	_ driver.Result = &ocResult{}
+	_ driver.Rows   = &ocRows{}
 )
 
 // Register initializes and registers our ocsql wrapped database driver
