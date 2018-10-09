@@ -13,10 +13,15 @@ import (
 	"go.opencensus.io/trace"
 )
 
-type connTx interface {
+type conn interface {
+	driver.Pinger
+	driver.Execer
+	driver.ExecerContext
+	driver.Queryer
+	driver.QueryerContext
 	driver.Conn
-	driver.ConnBeginTx
 	driver.ConnPrepareContext
+	driver.ConnBeginTx
 }
 
 var (
@@ -26,7 +31,7 @@ var (
 
 	// Compile time assertions
 	_ driver.Driver = &ocDriver{}
-	_ connTx        = &ocConn{}
+	_ conn          = &ocConn{}
 	_ driver.Result = &ocResult{}
 	_ driver.Rows   = &ocRows{}
 )
@@ -735,7 +740,7 @@ func setSpanStatus(span *trace.Span, err error) {
 		status.Code = trace.StatusCodeDeadlineExceeded
 	case sql.ErrNoRows:
 		status.Code = trace.StatusCodeNotFound
-	case sql.ErrTxDone, ErrConnDone:
+	case sql.ErrTxDone, errConnDone:
 		status.Code = trace.StatusCodeFailedPrecondition
 	default:
 		status.Code = trace.StatusCodeUnknown

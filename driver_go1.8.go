@@ -8,7 +8,7 @@ import (
 )
 
 // Dummy error for setSpanStatus (does exist as sql.ErrConnDone in 1.9+)
-var ErrConnDone = errors.New("database/sql: connection is already closed")
+var errConnDone = errors.New("database/sql: connection is already closed")
 
 // ocDriver implements driver.Driver
 type ocDriver struct {

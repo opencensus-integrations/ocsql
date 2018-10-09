@@ -7,7 +7,7 @@ import (
 	"database/sql/driver"
 )
 
-var ErrConnDone = sql.ErrConnDone
+var errConnDone = sql.ErrConnDone
 
 // ocDriver implements driver.Driver
 type ocDriver struct {
@@ -19,18 +19,18 @@ func wrapDriver(d driver.Driver, o TraceOptions) driver.Driver {
 	return ocDriver{parent: d, options: o}
 }
 
-func wrapConn(c driver.Conn, options TraceOptions) driver.Conn {
+func wrapConn(parent driver.Conn, options TraceOptions) driver.Conn {
 	var (
-		n, hasNameValueChecker = c.(driver.NamedValueChecker)
+		n, hasNameValueChecker = parent.(driver.NamedValueChecker)
 	)
-	conn := &ocConn{parent: c, options: options}
+	c := &ocConn{parent: parent, options: options}
 	if hasNameValueChecker {
 		return struct {
-			connTx
+			conn
 			driver.NamedValueChecker
-		}{conn, n}
+		}{c, n}
 	}
-	return conn
+	return c
 }
 
 func wrapStmt(stmt driver.Stmt, query string, options TraceOptions) driver.Stmt {
