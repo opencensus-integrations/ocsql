@@ -13,7 +13,7 @@ type TraceOption func(o *TraceOptions)
 // security in mind.
 type TraceOptions struct {
 	// AllowRoot, if set to true, will allow ocsql to create root spans in
-	// absence of exisiting spans or even context.
+	// absence of existing spans or even context.
 	// Default is to not trace ocsql calls if no existing parent span is found
 	// in context or when using methods not taking context.
 	AllowRoot bool
