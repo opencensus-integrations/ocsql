@@ -106,7 +106,7 @@ type ocConn struct {
 func (c ocConn) Ping(ctx context.Context) (err error) {
 	if c.options.Ping && (c.options.AllowRoot || trace.FromContext(ctx) != nil) {
 		var span *trace.Span
-		ctx, span = trace.StartSpan(ctx, "sql:ping")
+		ctx, span = trace.StartSpan(ctx, "sql:ping", trace.WithSpanKind(trace.SpanKindClient))
 		if len(c.options.DefaultAttributes) > 0 {
 			span.AddAttributes(c.options.DefaultAttributes...)
 		}
@@ -135,7 +135,7 @@ func (c ocConn) Exec(query string, args []driver.Value) (res driver.Result, err 
 			return exec.Exec(query, args)
 		}
 
-		ctx, span := trace.StartSpan(context.Background(), "sql:exec")
+		ctx, span := trace.StartSpan(context.Background(), "sql:exec", trace.WithSpanKind(trace.SpanKindClient))
 		attrs := make([]trace.Attribute, 0, len(c.options.DefaultAttributes)+2)
 		attrs = append(attrs, c.options.DefaultAttributes...)
 		attrs = append(
@@ -177,9 +177,9 @@ func (c ocConn) ExecContext(ctx context.Context, query string, args []driver.Nam
 
 		var span *trace.Span
 		if parentSpan == nil {
-			ctx, span = trace.StartSpan(ctx, "sql:exec")
+			ctx, span = trace.StartSpan(ctx, "sql:exec", trace.WithSpanKind(trace.SpanKindClient))
 		} else {
-			_, span = trace.StartSpan(ctx, "sql:exec")
+			_, span = trace.StartSpan(ctx, "sql:exec", trace.WithSpanKind(trace.SpanKindClient))
 		}
 		attrs := append([]trace.Attribute(nil), c.options.DefaultAttributes...)
 		if c.options.Query {
@@ -211,7 +211,7 @@ func (c ocConn) Query(query string, args []driver.Value) (rows driver.Rows, err 
 			return queryer.Query(query, args)
 		}
 
-		ctx, span := trace.StartSpan(context.Background(), "sql:query")
+		ctx, span := trace.StartSpan(context.Background(), "sql:query", trace.WithSpanKind(trace.SpanKindClient))
 		attrs := make([]trace.Attribute, 0, len(c.options.DefaultAttributes)+2)
 		attrs = append(attrs, c.options.DefaultAttributes...)
 		attrs = append(
@@ -254,9 +254,9 @@ func (c ocConn) QueryContext(ctx context.Context, query string, args []driver.Na
 
 		var span *trace.Span
 		if parentSpan == nil {
-			ctx, span = trace.StartSpan(ctx, "sql:query")
+			ctx, span = trace.StartSpan(ctx, "sql:query", trace.WithSpanKind(trace.SpanKindClient))
 		} else {
-			_, span = trace.StartSpan(ctx, "sql:query")
+			_, span = trace.StartSpan(ctx, "sql:query", trace.WithSpanKind(trace.SpanKindClient))
 		}
 		attrs := append([]trace.Attribute(nil), c.options.DefaultAttributes...)
 		if c.options.Query {
@@ -285,7 +285,7 @@ func (c ocConn) QueryContext(ctx context.Context, query string, args []driver.Na
 
 func (c ocConn) Prepare(query string) (stmt driver.Stmt, err error) {
 	if c.options.AllowRoot {
-		_, span := trace.StartSpan(context.Background(), "sql:prepare")
+		_, span := trace.StartSpan(context.Background(), "sql:prepare", trace.WithSpanKind(trace.SpanKindClient))
 		attrs := make([]trace.Attribute, 0, len(c.options.DefaultAttributes)+1)
 		attrs = append(attrs, c.options.DefaultAttributes...)
 		attrs = append(attrs, attrMissingContext)
@@ -321,7 +321,7 @@ func (c *ocConn) PrepareContext(ctx context.Context, query string) (stmt driver.
 	var span *trace.Span
 	attrs := append([]trace.Attribute(nil), c.options.DefaultAttributes...)
 	if c.options.AllowRoot || trace.FromContext(ctx) != nil {
-		ctx, span = trace.StartSpan(ctx, "sql:prepare")
+		ctx, span = trace.StartSpan(ctx, "sql:prepare", trace.WithSpanKind(trace.SpanKindClient))
 		if c.options.Query {
 			attrs = append(attrs, trace.StringAttribute("sql.query", query))
 		}
@@ -365,10 +365,10 @@ func (c *ocConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx,
 	}()
 	if ctx == nil || ctx == context.TODO() {
 		ctx = context.Background()
-		_, span = trace.StartSpan(ctx, "sql:begin_transaction")
+		_, span = trace.StartSpan(ctx, "sql:begin_transaction", trace.WithSpanKind(trace.SpanKindClient))
 		attrs = append(attrs, attrMissingContext)
 	} else {
-		_, span = trace.StartSpan(ctx, "sql:begin_transaction")
+		_, span = trace.StartSpan(ctx, "sql:begin_transaction", trace.WithSpanKind(trace.SpanKindClient))
 	}
 	defer span.End()
 
@@ -405,7 +405,7 @@ type ocResult struct {
 
 func (r ocResult) LastInsertId() (id int64, err error) {
 	if r.options.LastInsertID {
-		_, span := trace.StartSpan(r.ctx, "sql:last_insert_id")
+		_, span := trace.StartSpan(r.ctx, "sql:last_insert_id", trace.WithSpanKind(trace.SpanKindClient))
 		if len(r.options.DefaultAttributes) > 0 {
 			span.AddAttributes(r.options.DefaultAttributes...)
 		}
@@ -421,7 +421,7 @@ func (r ocResult) LastInsertId() (id int64, err error) {
 
 func (r ocResult) RowsAffected() (cnt int64, err error) {
 	if r.options.RowsAffected {
-		_, span := trace.StartSpan(r.ctx, "sql:rows_affected")
+		_, span := trace.StartSpan(r.ctx, "sql:rows_affected", trace.WithSpanKind(trace.SpanKindClient))
 		if len(r.options.DefaultAttributes) > 0 {
 			span.AddAttributes(r.options.DefaultAttributes...)
 		}
@@ -447,7 +447,7 @@ func (s ocStmt) Exec(args []driver.Value) (res driver.Result, err error) {
 		return s.parent.Exec(args)
 	}
 
-	ctx, span := trace.StartSpan(context.Background(), "sql:exec")
+	ctx, span := trace.StartSpan(context.Background(), "sql:exec", trace.WithSpanKind(trace.SpanKindClient))
 	attrs := make([]trace.Attribute, 0, len(s.options.DefaultAttributes)+2)
 	attrs = append(attrs, s.options.DefaultAttributes...)
 	attrs = append(
@@ -492,7 +492,7 @@ func (s ocStmt) Query(args []driver.Value) (rows driver.Rows, err error) {
 		return s.parent.Query(args)
 	}
 
-	ctx, span := trace.StartSpan(context.Background(), "sql:query")
+	ctx, span := trace.StartSpan(context.Background(), "sql:query", trace.WithSpanKind(trace.SpanKindClient))
 	attrs := make([]trace.Attribute, 0, len(s.options.DefaultAttributes)+2)
 	attrs = append(attrs, s.options.DefaultAttributes...)
 	attrs = append(
@@ -532,9 +532,9 @@ func (s ocStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (res 
 
 	var span *trace.Span
 	if parentSpan == nil {
-		ctx, span = trace.StartSpan(ctx, "sql:exec")
+		ctx, span = trace.StartSpan(ctx, "sql:exec", trace.WithSpanKind(trace.SpanKindClient))
 	} else {
-		_, span = trace.StartSpan(ctx, "sql:exec")
+		_, span = trace.StartSpan(ctx, "sql:exec", trace.WithSpanKind(trace.SpanKindClient))
 	}
 	attrs := append([]trace.Attribute(nil), s.options.DefaultAttributes...)
 	if s.options.Query {
@@ -569,9 +569,9 @@ func (s ocStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (row
 
 	var span *trace.Span
 	if parentSpan == nil {
-		ctx, span = trace.StartSpan(ctx, "sql:query")
+		ctx, span = trace.StartSpan(ctx, "sql:query", trace.WithSpanKind(trace.SpanKindClient))
 	} else {
-		_, span = trace.StartSpan(ctx, "sql:query")
+		_, span = trace.StartSpan(ctx, "sql:query", trace.WithSpanKind(trace.SpanKindClient))
 	}
 	attrs := append([]trace.Attribute(nil), s.options.DefaultAttributes...)
 	if s.options.Query {
@@ -610,7 +610,7 @@ func (r ocRows) Columns() []string {
 
 func (r ocRows) Close() (err error) {
 	if r.options.RowsClose {
-		_, span := trace.StartSpan(r.ctx, "sql:rows_close")
+		_, span := trace.StartSpan(r.ctx, "sql:rows_close", trace.WithSpanKind(trace.SpanKindClient))
 		if len(r.options.DefaultAttributes) > 0 {
 			span.AddAttributes(r.options.DefaultAttributes...)
 		}
@@ -626,7 +626,7 @@ func (r ocRows) Close() (err error) {
 
 func (r ocRows) Next(dest []driver.Value) (err error) {
 	if r.options.RowsNext {
-		_, span := trace.StartSpan(r.ctx, "sql:rows_next")
+		_, span := trace.StartSpan(r.ctx, "sql:rows_next", trace.WithSpanKind(trace.SpanKindClient))
 		if len(r.options.DefaultAttributes) > 0 {
 			span.AddAttributes(r.options.DefaultAttributes...)
 		}
@@ -653,7 +653,7 @@ type ocTx struct {
 }
 
 func (t ocTx) Commit() (err error) {
-	_, span := trace.StartSpan(t.ctx, "sql:commit")
+	_, span := trace.StartSpan(t.ctx, "sql:commit", trace.WithSpanKind(trace.SpanKindClient))
 	if len(t.options.DefaultAttributes) > 0 {
 		span.AddAttributes(t.options.DefaultAttributes...)
 	}
@@ -667,7 +667,7 @@ func (t ocTx) Commit() (err error) {
 }
 
 func (t ocTx) Rollback() (err error) {
-	_, span := trace.StartSpan(t.ctx, "sql:rollback")
+	_, span := trace.StartSpan(t.ctx, "sql:rollback", trace.WithSpanKind(trace.SpanKindClient))
 	if len(t.options.DefaultAttributes) > 0 {
 		span.AddAttributes(t.options.DefaultAttributes...)
 	}
