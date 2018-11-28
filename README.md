@@ -1,13 +1,17 @@
 # ocsql
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/opencensus-integrations/ocsql)](https://goreportcard.com/report/github.com/opencensus-integrations/ocsql)
-[![GoDoc](https://godoc.org/github.com/opencensus-integrations/ocsql?status.svg)](https://godoc.org/github.com/opencensus-integrations/ocsql)
+[![Go Report Card](https://goreportcard.com/badge/contrib.go.opencensus.io/integrations/ocsql)](https://goreportcard.com/report/contrib.go.opencensus.io/integrations/ocsql)
+[![GoDoc](https://godoc.org/contrib.go.opencensus.io/integrations/ocsql?status.svg)](https://godoc.org/contrib.go.opencensus.io/integrations/ocsql)
 [![Sourcegraph](https://sourcegraph.com/github.com/opencensus-integrations/ocsql/-/badge.svg)](https://sourcegraph.com/github.com/opencensus-integrations/ocsql?badge)
 
 OpenCensus SQL database driver wrapper.
 
 Add an ocsql wrapper to your existing database code to instrument the
 interactions with the database.
+
+## installation
+
+go get -u contrib.go.opencensus.io/integrations/ocsql
 
 ## initialize
 
@@ -18,7 +22,7 @@ Example:
 ```go
 import (
     _ "github.com/mattn/go-sqlite3"
-    "github.com/opencensus-integrations/ocsql"
+    "contrib.go.opencensus.io/integrations/ocsql"
 )
 
 var (
@@ -45,7 +49,7 @@ Example:
 ```go
 import (
     sqlite3 "github.com/mattn/go-sqlite3"
-    "github.com/opencensus-integrations/ocsql"
+    "contrib.go.opencensus.io/integrations/ocsql"
 )
 
 var (
@@ -62,6 +66,22 @@ sql.Register("ocsql-sqlite3", driver)
 
 // Connect to a SQLite3 database using the ocsql driver wrapper
 db, err = sql.Open("ocsql-sqlite3", "resource.db")
+```
+
+Projects providing their own abstractions on top of database/sql/driver can also
+wrap an existing driver.Conn interface directly with ocsql.
+
+Example:
+```go
+import "contrib.go.opencensus.io/integrations/ocsql"
+
+func GetConn(...) driver.Conn {
+    // create custom driver.Conn
+    conn := initializeConn(...)
+
+    // wrap with ocsql
+    return ocsql.WrapConn(conn, ocsql.WithAllTraceOptions())    
+}
 ```
 
 ## jmoiron/sqlx

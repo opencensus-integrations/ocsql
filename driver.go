@@ -89,12 +89,22 @@ func Wrap(d driver.Driver, options ...TraceOption) driver.Driver {
 	return wrapDriver(d, o)
 }
 
+// Open implements driver.Driver
 func (d ocDriver) Open(name string) (driver.Conn, error) {
 	c, err := d.parent.Open(name)
 	if err != nil {
 		return nil, err
 	}
 	return wrapConn(c, d.options), nil
+}
+
+// WrapConn allows an existing driver.Conn to be wrapped by ocsql.
+func WrapConn(c driver.Conn, options ...TraceOption) driver.Conn {
+	o := TraceOptions{}
+	for _, option := range options {
+		option(&o)
+	}
+	return wrapConn(c, o)
 }
 
 // ocConn implements driver.Conn
