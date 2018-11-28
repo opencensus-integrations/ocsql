@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"strconv"
 	"sync"
 
@@ -30,10 +31,18 @@ var (
 	attrDeprecated     = trace.StringAttribute("ocsql.warning", "database driver uses deprecated features")
 
 	// Compile time assertions
-	_ driver.Driver = &ocDriver{}
-	_ conn          = &ocConn{}
-	_ driver.Result = &ocResult{}
-	_ driver.Rows   = &ocRows{}
+	_ driver.Driver                         = &ocDriver{}
+	_ conn                                  = &ocConn{}
+	_ driver.Result                         = &ocResult{}
+	_ driver.Stmt                           = &ocStmt{}
+	_ driver.StmtExecContext                = &ocStmt{}
+	_ driver.StmtQueryContext               = &ocStmt{}
+	_ driver.Rows                           = &ocRows{}
+	_ driver.RowsNextResultSet              = &ocRows{}
+	_ driver.RowsColumnTypeDatabaseTypeName = &ocRows{}
+	_ driver.RowsColumnTypeLength           = &ocRows{}
+	_ driver.RowsColumnTypeNullable         = &ocRows{}
+	_ driver.RowsColumnTypePrecisionScale   = &ocRows{}
 )
 
 // Register initializes and registers our ocsql wrapped database driver
@@ -249,7 +258,7 @@ func (c ocConn) Query(query string, args []driver.Value) (rows driver.Rows, err 
 			return nil, err
 		}
 
-		return ocRows{parent: rows, ctx: ctx, options: c.options}, nil
+		return wrapRows(ctx, rows, c.options), nil
 	}
 
 	return nil, driver.ErrSkip
@@ -287,7 +296,7 @@ func (c ocConn) QueryContext(ctx context.Context, query string, args []driver.Na
 			return nil, err
 		}
 
-		return ocRows{parent: rows, ctx: ctx, options: c.options}, nil
+		return wrapRows(ctx, rows, c.options), nil
 	}
 
 	return nil, driver.ErrSkip
@@ -529,7 +538,7 @@ func (s ocStmt) Query(args []driver.Value) (rows driver.Rows, err error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err = ocRows{parent: rows, ctx: ctx, options: s.options}, nil
+	rows, err = wrapRows(ctx, rows, s.options), nil
 	return
 }
 
@@ -603,15 +612,91 @@ func (s ocStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (row
 	if err != nil {
 		return nil, err
 	}
-	rows, err = ocRows{parent: rows, ctx: ctx, options: s.options}, nil
+	rows, err = wrapRows(ctx, rows, s.options), nil
 	return
 }
 
-// ocRows implements driver.Rows.
+// withRowsColumnTypeScanType is the same as the driver.RowsColumnTypeScanType
+// interface except it omits the driver.Rows embedded interface.
+// If the original driver.Rows implementation wrapped by ocsql supports
+// RowsColumnTypeScanType we enable the original method implementation in the
+// returned driver.Rows from wrapRows by doing a composition with ocRows.
+type withRowsColumnTypeScanType interface {
+	ColumnTypeScanType(index int) reflect.Type
+}
+
+// ocRows implements driver.Rows and all enhancement interfaces except
+// driver.RowsColumnTypeScanType.
 type ocRows struct {
 	parent  driver.Rows
 	ctx     context.Context
 	options TraceOptions
+}
+
+// HasNextResultSet calls the implements the driver.RowsNextResultSet for ocRows.
+// It returns the the underlying result of HasNextResultSet from the ocRows.parent
+// if the parent implements driver.RowsNextResultSet.
+func (r ocRows) HasNextResultSet() bool {
+	if v, ok := r.parent.(driver.RowsNextResultSet); ok {
+		return v.HasNextResultSet()
+	}
+
+	return false
+}
+
+// NextResultsSet calls the implements the driver.RowsNextResultSet for ocRows.
+// It returns the the underlying result of NextResultSet from the ocRows.parent
+// if the parent implements driver.RowsNextResultSet.
+func (r ocRows) NextResultSet() error {
+	if v, ok := r.parent.(driver.RowsNextResultSet); ok {
+		return v.NextResultSet()
+	}
+
+	return io.EOF
+}
+
+// ColumnTypeDatabaseTypeName calls the implements the driver.RowsColumnTypeDatabaseTypeName for ocRows.
+// It returns the the underlying result of ColumnTypeDatabaseTypeName from the ocRows.parent
+// if the parent implements driver.RowsColumnTypeDatabaseTypeName.
+func (r ocRows) ColumnTypeDatabaseTypeName(index int) string {
+	if v, ok := r.parent.(driver.RowsColumnTypeDatabaseTypeName); ok {
+		return v.ColumnTypeDatabaseTypeName(index)
+	}
+
+	return ""
+}
+
+// ColumnTypeLength calls the implements the driver.RowsColumnTypeLength for ocRows.
+// It returns the the underlying result of ColumnTypeLength from the ocRows.parent
+// if the parent implements driver.RowsColumnTypeLength.
+func (r ocRows) ColumnTypeLength(index int) (length int64, ok bool) {
+	if v, ok := r.parent.(driver.RowsColumnTypeLength); ok {
+		return v.ColumnTypeLength(index)
+	}
+
+	return 0, false
+}
+
+// ColumnTypeNullable calls the implements the driver.RowsColumnTypeNullable for ocRows.
+// It returns the the underlying result of ColumnTypeNullable from the ocRows.parent
+// if the parent implements driver.RowsColumnTypeNullable.
+func (r ocRows) ColumnTypeNullable(index int) (nullable, ok bool) {
+	if v, ok := r.parent.(driver.RowsColumnTypeNullable); ok {
+		return v.ColumnTypeNullable(index)
+	}
+
+	return false, false
+}
+
+// ColumnTypePrecisionScale calls the implements the driver.RowsColumnTypePrecisionScale for ocRows.
+// It returns the the underlying result of ColumnTypePrecisionScale from the ocRows.parent
+// if the parent implements driver.RowsColumnTypePrecisionScale.
+func (r ocRows) ColumnTypePrecisionScale(index int) (precision, scale int64, ok bool) {
+	if v, ok := r.parent.(driver.RowsColumnTypePrecisionScale); ok {
+		return v.ColumnTypePrecisionScale(index)
+	}
+
+	return 0, 0, false
 }
 
 func (r ocRows) Columns() []string {
@@ -653,6 +738,33 @@ func (r ocRows) Next(dest []driver.Value) (err error) {
 
 	err = r.parent.Next(dest)
 	return
+}
+
+// wrapRows returns a struct which conforms to the driver.Rows interface.
+// ocRows implements all enhancement interfaces that have no effect on
+// sql/database logic in case the underlying parent implementation lacks them.
+// Currently the one exception is RowsColumnTypeScanType which does not have a
+// valid zero value. This interface is tested for and only enabled in case the
+// parent implementation supports it.
+func wrapRows(ctx context.Context, parent driver.Rows, options TraceOptions) driver.Rows {
+	var (
+		ts, hasColumnTypeScan = parent.(driver.RowsColumnTypeScanType)
+	)
+
+	r := ocRows{
+		parent:  parent,
+		ctx:     ctx,
+		options: options,
+	}
+
+	if hasColumnTypeScan {
+		return struct {
+			ocRows
+			withRowsColumnTypeScanType
+		}{r, ts}
+	}
+
+	return r
 }
 
 // ocTx implemens driver.Tx

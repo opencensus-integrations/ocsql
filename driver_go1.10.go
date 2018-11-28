@@ -11,7 +11,10 @@ import (
 var errConnDone = sql.ErrConnDone
 
 // Compile time assertion
-var _ driver.DriverContext = &ocDriver{}
+var (
+	_ driver.DriverContext = &ocDriver{}
+	_ driver.Connector     = &ocDriver{}
+)
 
 // ocDriver implements driver.Driver
 type ocDriver struct {
