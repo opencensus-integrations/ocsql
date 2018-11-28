@@ -31,10 +31,18 @@ var (
 	attrDeprecated     = trace.StringAttribute("ocsql.warning", "database driver uses deprecated features")
 
 	// Compile time assertions
-	_ driver.Driver = &ocDriver{}
-	_ conn          = &ocConn{}
-	_ driver.Result = &ocResult{}
-	_ driver.Rows   = &ocRows{}
+	_ driver.Driver                         = &ocDriver{}
+	_ conn                                  = &ocConn{}
+	_ driver.Result                         = &ocResult{}
+	_ driver.Stmt                           = &ocStmt{}
+	_ driver.StmtExecContext                = &ocStmt{}
+	_ driver.StmtQueryContext               = &ocStmt{}
+	_ driver.Rows                           = &ocRows{}
+	_ driver.RowsNextResultSet              = &ocRows{}
+	_ driver.RowsColumnTypeDatabaseTypeName = &ocRows{}
+	_ driver.RowsColumnTypeLength           = &ocRows{}
+	_ driver.RowsColumnTypeNullable         = &ocRows{}
+	_ driver.RowsColumnTypePrecisionScale   = &ocRows{}
 )
 
 // Register initializes and registers our ocsql wrapped database driver
@@ -250,7 +258,7 @@ func (c ocConn) Query(query string, args []driver.Value) (rows driver.Rows, err 
 			return nil, err
 		}
 
-		return wrapRows(rows, ctx, c.options), nil
+		return wrapRows(ctx, rows, c.options), nil
 	}
 
 	return nil, driver.ErrSkip
@@ -288,7 +296,7 @@ func (c ocConn) QueryContext(ctx context.Context, query string, args []driver.Na
 			return nil, err
 		}
 
-		return wrapRows(rows, ctx, c.options), nil
+		return wrapRows(ctx, rows, c.options), nil
 	}
 
 	return nil, driver.ErrSkip
@@ -530,7 +538,7 @@ func (s ocStmt) Query(args []driver.Value) (rows driver.Rows, err error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err = wrapRows(rows, ctx, s.options), nil
+	rows, err = wrapRows(ctx, rows, s.options), nil
 	return
 }
 
@@ -604,20 +612,21 @@ func (s ocStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (row
 	if err != nil {
 		return nil, err
 	}
-	rows, err = wrapRows(rows, ctx, s.options), nil
+	rows, err = wrapRows(ctx, rows, s.options), nil
 	return
 }
 
-
-// RowsColumnTypeScanType is a duplicate interface for driver.RowsColumnTypeScanType but
-// with the driver.Rows composition removed.
-//
-// This is used to embed a anonymous struct without running into ambiguous method errors.
-type RowsColumnTypeScanType interface {
+// withRowsColumnTypeScanType is the same as the driver.RowsColumnTypeScanType
+// interface except it omits the driver.Rows embedded interface.
+// If the original driver.Rows implementation wrapped by ocsql supports
+// RowsColumnTypeScanType we enable the original method implementation in the
+// returned driver.Rows from wrapRows by doing a composition with ocRows.
+type withRowsColumnTypeScanType interface {
 	ColumnTypeScanType(index int) reflect.Type
 }
 
-// ocRows implements driver.Rows.
+// ocRows implements driver.Rows and all enhancement interfaces except
+// driver.RowsColumnTypeScanType.
 type ocRows struct {
 	parent  driver.Rows
 	ctx     context.Context
@@ -732,9 +741,12 @@ func (r ocRows) Next(dest []driver.Value) (err error) {
 }
 
 // wrapRows returns a struct which conforms to the driver.Rows interface.
-// It checks if the parent adheres to any additional driver interfaces and returns a matching
-// implementation accordingly.
-func wrapRows(parent driver.Rows, ctx context.Context, options TraceOptions) driver.Rows {
+// ocRows implements all enhancement interfaces that have no effect on
+// sql/database logic in case the underlying parent implementation lacks them.
+// Currently the one exception is RowsColumnTypeScanType which does not have a
+// valid zero value. This interface is tested for and only enabled in case the
+// parent implementation supports it.
+func wrapRows(ctx context.Context, parent driver.Rows, options TraceOptions) driver.Rows {
 	var (
 		ts, hasColumnTypeScan = parent.(driver.RowsColumnTypeScanType)
 	)
@@ -747,8 +759,8 @@ func wrapRows(parent driver.Rows, ctx context.Context, options TraceOptions) dri
 
 	if hasColumnTypeScan {
 		return struct {
-			driver.Rows
-			RowsColumnTypeScanType
+			ocRows
+			withRowsColumnTypeScanType
 		}{r, ts}
 	}
 
