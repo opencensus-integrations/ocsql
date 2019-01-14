@@ -11,15 +11,15 @@ import (
 
 // The following tags are applied to stats recorded by this package.
 var (
-	// GoSqlMethod is the SQL method called.
-	GoSqlMethod, _ = tag.NewKey("go_sql_method")
-	// GoSqlError is the error received while calling a SQL method.
-	GoSqlError, _ = tag.NewKey("go_sql_error")
-	// GoSqlStatus identifies success vs. error from the SQL method response.
-	GoSqlStatus, _ = tag.NewKey("go_sql_status")
+	// GoSQLMethod is the SQL method called.
+	GoSQLMethod, _ = tag.NewKey("go_sql_method")
+	// GoSQLError is the error received while calling a SQL method.
+	GoSQLError, _ = tag.NewKey("go_sql_error")
+	// GoSQLStatus identifies success vs. error from the SQL method response.
+	GoSQLStatus, _ = tag.NewKey("go_sql_status")
 
-	valueOK  = tag.Insert(GoSqlStatus, "OK")
-	valueErr = tag.Insert(GoSqlStatus, "ERROR")
+	valueOK  = tag.Insert(GoSQLStatus, "OK")
+	valueErr = tag.Insert(GoSQLStatus, "ERROR")
 )
 
 // The following measures are supported for use in custom views.
@@ -74,65 +74,65 @@ var (
 // You still need to register these views for data to actually be collected.
 // You can use the RegisterAllViews function for this.
 var (
-	SqlClientLatencyView = &view.View{
+	SQLClientLatencyView = &view.View{
 		Name:        "go.sql/client/latency",
 		Description: "The distribution of latencies of various calls in milliseconds",
 		Measure:     MeasureLatencyMs,
 		Aggregation: DefaultMillisecondsDistribution,
-		TagKeys:     []tag.Key{GoSqlMethod, GoSqlError, GoSqlStatus},
+		TagKeys:     []tag.Key{GoSQLMethod, GoSQLError, GoSQLStatus},
 	}
 
-	SqlClientCallsView = &view.View{
+	SQLClientCallsView = &view.View{
 		Name:        "go.sql/client/calls",
 		Description: "The number of various calls of methods",
 		Measure:     MeasureLatencyMs,
 		Aggregation: view.Count(),
-		TagKeys:     []tag.Key{GoSqlMethod, GoSqlError, GoSqlStatus},
+		TagKeys:     []tag.Key{GoSQLMethod, GoSQLError, GoSQLStatus},
 	}
 
-	SqlClientOpenConnectionsView = &view.View{
+	SQLClientOpenConnectionsView = &view.View{
 		Name:        "go.sql/db/connections/open",
 		Description: "The number of open connections",
 		Measure:     MeasureOpenConnections,
 		Aggregation: view.LastValue(),
 	}
 
-	SqlClientIdleConnectionsView = &view.View{
+	SQLClientIdleConnectionsView = &view.View{
 		Name:        "go.sql/db/connections/idle",
 		Description: "The number of idle connections",
 		Measure:     MeasureIdleConnections,
 		Aggregation: view.LastValue(),
 	}
 
-	SqlClientActiveConnectionsView = &view.View{
+	SQLClientActiveConnectionsView = &view.View{
 		Name:        "go.sql/db/connections/active",
 		Description: "The number of active connections",
 		Measure:     MeasureActiveConnections,
 		Aggregation: view.LastValue(),
 	}
 
-	SqlClientWaitCountView = &view.View{
+	SQLClientWaitCountView = &view.View{
 		Name:        "go.sql/db/connections/wait_count",
 		Description: "The total number of connections waited for",
 		Measure:     MeasureWaitCount,
 		Aggregation: view.LastValue(),
 	}
 
-	SqlClientWaitDurationView = &view.View{
+	SQLClientWaitDurationView = &view.View{
 		Name:        "go.sql/db/connections/wait_duration",
 		Description: "The total time blocked waiting for a new connection",
 		Measure:     MeasureWaitDuration,
 		Aggregation: view.LastValue(),
 	}
 
-	SqlClientIdleClosedView = &view.View{
+	SQLClientIdleClosedView = &view.View{
 		Name:        "go.sql/db/connections/idle_closed_count",
 		Description: "The total number of connections closed due to SetMaxIdleConns",
 		Measure:     MeasureIdleClosed,
 		Aggregation: view.LastValue(),
 	}
 
-	SqlClientLifetimeClosedView = &view.View{
+	SQLClientLifetimeClosedView = &view.View{
 		Name:        "go.sql/db/connections/lifetime_closed_count",
 		Description: "The total number of connections closed due to SetConnMaxLifetime",
 		Measure:     MeasureLifetimeClosed,
@@ -140,10 +140,10 @@ var (
 	}
 
 	DefaultViews = []*view.View{
-		SqlClientLatencyView, SqlClientCallsView, SqlClientOpenConnectionsView,
-		SqlClientIdleConnectionsView, SqlClientActiveConnectionsView,
-		SqlClientWaitCountView, SqlClientWaitDurationView,
-		SqlClientIdleClosedView, SqlClientLifetimeClosedView,
+		SQLClientLatencyView, SQLClientCallsView, SQLClientOpenConnectionsView,
+		SQLClientIdleConnectionsView, SQLClientActiveConnectionsView,
+		SQLClientWaitCountView, SQLClientWaitDurationView,
+		SQLClientIdleClosedView, SQLClientLifetimeClosedView,
 	}
 )
 
@@ -163,11 +163,11 @@ func recordCallStats(ctx context.Context, method string) func(err error) {
 
 		if err != nil {
 			tags = []tag.Mutator{
-				tag.Insert(GoSqlMethod, method), valueErr, tag.Insert(GoSqlError, err.Error()),
+				tag.Insert(GoSQLMethod, method), valueErr, tag.Insert(GoSQLError, err.Error()),
 			}
 		} else {
 			tags = []tag.Mutator{
-				tag.Insert(GoSqlMethod, method), valueOK,
+				tag.Insert(GoSQLMethod, method), valueOK,
 			}
 		}
 
