@@ -84,6 +84,33 @@ func GetConn(...) driver.Conn {
 }
 ```
 
+## metrics
+
+Next to tracing, ocsql also supports OpenCensus stats. To record call stats,
+register the available views or create your own using the provided Measures.
+
+```go
+// register default views
+ocsql.RegisterAllViews()
+
+```
+
+From Go 1.11 and up, ocsql also has the ability to record database connection
+pool details. Use the `RecordStats` function and provide a `*sql.DB` to record
+details on, as well as the required record interval.
+
+```go
+// register default views
+ocsql.RegisterAllViews()
+
+// Connect to a SQLite3 database using the ocsql driver wrapper
+db, err = sql.Open("ocsql-sqlite3", "resource.db")
+
+// Record DB stats every 5 seconds
+ocsql.RecordStats(db, 5 * time.Second)
+
+```
+
 ## jmoiron/sqlx
 
 If using the `sqlx` library with named queries you will need to use the
