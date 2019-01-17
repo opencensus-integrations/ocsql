@@ -5,6 +5,7 @@ package ocsql
 import (
 	"context"
 	"database/sql"
+	"sync"
 	"time"
 
 	"go.opencensus.io/stats"
@@ -14,9 +15,10 @@ import (
 // interval.
 func RecordStats(db *sql.DB, interval time.Duration) (fnStop func()) {
 	var (
-		ctx    = context.Background()
-		ticker = time.NewTicker(interval)
-		done   = make(chan struct{})
+		closeOnce sync.Once
+		ctx       = context.Background()
+		ticker    = time.NewTicker(interval)
+		done      = make(chan struct{})
 	)
 
 	go func() {
@@ -41,6 +43,8 @@ func RecordStats(db *sql.DB, interval time.Duration) (fnStop func()) {
 	}()
 
 	return func() {
-		close(done)
+		closeOnce.Do(func() {
+			close(done)
+		})
 	}
 }

@@ -159,7 +159,7 @@ func recordCallStats(ctx context.Context, method string) func(err error) {
 	startTime := time.Now()
 
 	return func(err error) {
-		timeSpent := float64(time.Since(startTime).Nanoseconds()) / 1e6
+		timeSpentMs := float64(time.Since(startTime).Nanoseconds()) / 1e6
 
 		if err != nil {
 			tags = []tag.Mutator{
@@ -171,6 +171,6 @@ func recordCallStats(ctx context.Context, method string) func(err error) {
 			}
 		}
 
-		_ = stats.RecordWithTags(ctx, tags, MeasureLatencyMs.M(timeSpent))
+		_ = stats.RecordWithTags(ctx, tags, MeasureLatencyMs.M(timeSpentMs))
 	}
 }
