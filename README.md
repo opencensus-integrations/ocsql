@@ -110,6 +110,25 @@ db, err = sql.Open("ocsql-sqlite3", "resource.db")
 defer ocsql.RecordStats(db, 5 * time.Second)()
 ```
 
+## Recorded metrics
+
+| Metric                 | Search suffix          | Additional tags            |
+|------------------------|------------------------|----------------------------|
+| Number of Calls        | "go.sql/client/calls"  |"method", "error", "status" |
+| Latency in milliseconds| "go.sql/client/latency"|"method", "error", "status" |
+
+If using RecordStats:
+
+| Metric                                                   | Search suffix                                |
+|----------------------------------------------------------|----------------------------------------------|
+| Number of open connections                               | "go.sql/db/connections/open"                 |
+| Number of idle connections                               | "go.sql/db/connections/idle"                 |
+| Number of active connections                             | "go.sql/db/connections/active"               |
+| Total number of connections waited for                   | "go.sql/db/connections/wait_count"           |
+| Total time blocked waiting for new connections           | "go.sql/db/connections/wait_duration"        |
+| Total number of closed connections by SetMaxIdleConns    | "go.sql/db/connections/idle_close_count"     |
+| Total number of closed connections by SetConnMaxLifetime | "go.sql/db/connections/lifetime_close_count" |
+
 ## jmoiron/sqlx
 
 If using the `sqlx` library with named queries you will need to use the
