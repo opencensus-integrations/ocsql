@@ -106,9 +106,8 @@ ocsql.RegisterAllViews()
 // Connect to a SQLite3 database using the ocsql driver wrapper
 db, err = sql.Open("ocsql-sqlite3", "resource.db")
 
-// Record DB stats every 5 seconds
-ocsql.RecordStats(db, 5 * time.Second)
-
+// Record DB stats every 5 seconds until we exit
+defer ocsql.RecordStats(db, 5 * time.Second)()
 ```
 
 ## jmoiron/sqlx
