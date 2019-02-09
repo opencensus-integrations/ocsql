@@ -58,13 +58,13 @@ var (
     db     *sql.DB
 )
 
-// Explicitly wrap the SQLite3 driver with ocsql
+// Explicitly wrap the SQLite3 driver with ocsql.
 driver = ocsql.Wrap(&sqlite3.SQLiteDriver{})
 
-// Register our ocsql wrapper as a database driver
+// Register our ocsql wrapper as a database driver.
 sql.Register("ocsql-sqlite3", driver)
 
-// Connect to a SQLite3 database using the ocsql driver wrapper
+// Connect to a SQLite3 database using the ocsql driver wrapper.
 db, err = sql.Open("ocsql-sqlite3", "resource.db")
 ```
 
@@ -76,12 +76,42 @@ Example:
 import "contrib.go.opencensus.io/integrations/ocsql"
 
 func GetConn(...) driver.Conn {
-    // create custom driver.Conn
+    // Create custom driver.Conn.
     conn := initializeConn(...)
 
-    // wrap with ocsql
+    // Wrap with ocsql.
     return ocsql.WrapConn(conn, ocsql.WithAllTraceOptions())    
 }
+```
+
+Finally database drivers that support the new (Go 1.10+) driver.Connector
+interface can be wrapped directly by ocsql without the need for ocsql to
+register a driver.Driver.
+
+Example:
+```go
+import(
+    "contrib.go.opencensus.io/integrations/ocsql"
+    "github.com/lib/pq"
+)
+
+var (
+    connector driver.Connector
+    err       error
+    db        *sql.DB
+)
+
+// Get a database driver.Connector for a fixed configuration.
+connector, err = pq.NewConnector("postgres://user:passt@host:5432/db")
+if err != nil {
+    log.Fatalf("unable to create our postgres connector: %v\n", err)
+}
+
+// Wrap the driver.Connector with ocsql.
+connector = ocsql.WrapConnector(connector, ocsql.WithAllTraceOptions())
+
+// Use the wrapped driver.Connector.
+db = sql.OpenDB(connector)
 ```
 
 ## metrics
@@ -90,7 +120,7 @@ Next to tracing, ocsql also supports OpenCensus stats. To record call stats,
 register the available views or create your own using the provided Measures.
 
 ```go
-// register default views
+// Register default views.
 ocsql.RegisterAllViews()
 
 ```
@@ -100,13 +130,13 @@ pool details. Use the `RecordStats` function and provide a `*sql.DB` to record
 details on, as well as the required record interval.
 
 ```go
-// register default views
+// Register default views.
 ocsql.RegisterAllViews()
 
-// Connect to a SQLite3 database using the ocsql driver wrapper
+// Connect to a SQLite3 database using the ocsql driver wrapper.
 db, err = sql.Open("ocsql-sqlite3", "resource.db")
 
-// Record DB stats every 5 seconds until we exit
+// Record DB stats every 5 seconds until we exit.
 defer ocsql.RecordStats(db, 5 * time.Second)()
 ```
 
@@ -186,7 +216,7 @@ Example:
 ```go
 
 func (s *svc) GetDevice(ctx context.Context, id int) (*Device, error) {
-    // assume we have instrumented our service transports and ctx holds a span.
+    // Assume we have instrumented our service transports and ctx holds a span.
     var device Device
     if err := s.db.QueryRowContext(
         ctx, "SELECT * FROM device WHERE id = ?", id,

@@ -16,6 +16,21 @@ var (
 	_ driver.Connector     = &ocDriver{}
 )
 
+// WrapConnector allows wrapping a database driver.Connector which eliminates
+// the need to register ocsql as an available driver.Driver.
+func WrapConnector(dc driver.Connector, options ...TraceOption) driver.Connector {
+	opts := TraceOptions{}
+	for _, o := range options {
+		o(&opts)
+	}
+
+	return &ocDriver{
+		parent:    dc.Driver(),
+		connector: dc,
+		options:   opts,
+	}
+}
+
 // ocDriver implements driver.Driver
 type ocDriver struct {
 	parent    driver.Driver
