@@ -413,7 +413,7 @@ func (c *ocConn) BeginTx(ctx context.Context, opts driver.TxOptions) (tx driver.
 		if err != nil {
 			return nil, err
 		}
-		return ocTx{parent: tx, ctx: ctx}, nil
+		return ocTx{parent: tx, ctx: ctx, options: c.options}, nil
 	}
 
 	attrs = append(
@@ -428,7 +428,7 @@ func (c *ocConn) BeginTx(ctx context.Context, opts driver.TxOptions) (tx driver.
 	if err != nil {
 		return nil, err
 	}
-	return ocTx{parent: tx, ctx: ctx}, nil
+	return ocTx{parent: tx, ctx: ctx, options: c.options}, nil
 }
 
 // ocResult implements driver.Result
