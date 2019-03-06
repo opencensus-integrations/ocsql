@@ -393,11 +393,7 @@ func (c *ocConn) BeginTx(ctx context.Context, opts driver.TxOptions) (tx driver.
 
 	var span *trace.Span
 	attrs := append([]trace.Attribute(nil), c.options.DefaultAttributes...)
-	defer func() {
-		if len(attrs) > 0 {
-			span.AddAttributes(attrs...)
-		}
-	}()
+
 	if ctx == nil || ctx == context.TODO() {
 		ctx = context.Background()
 		_, span = trace.StartSpan(ctx, "sql:begin_transaction", trace.WithSpanKind(trace.SpanKindClient))
@@ -405,7 +401,12 @@ func (c *ocConn) BeginTx(ctx context.Context, opts driver.TxOptions) (tx driver.
 	} else {
 		_, span = trace.StartSpan(ctx, "sql:begin_transaction", trace.WithSpanKind(trace.SpanKindClient))
 	}
-	defer span.End()
+	defer func() {
+		if len(attrs) > 0 {
+			span.AddAttributes(attrs...)
+		}
+		span.End()
+	}()
 
 	if connBeginTx, ok := c.parent.(driver.ConnBeginTx); ok {
 		tx, err = connBeginTx.BeginTx(ctx, opts)
