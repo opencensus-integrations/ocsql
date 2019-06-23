@@ -177,7 +177,7 @@ func (c ocConn) Exec(query string, args []driver.Value) (res driver.Result, err 
 		span.AddAttributes(attrs...)
 
 		defer func() {
-			setSpanStatus(span, err)
+			setSpanStatus(span, c.options, err)
 			span.End()
 		}()
 
@@ -216,7 +216,7 @@ func (c ocConn) ExecContext(ctx context.Context, query string, args []driver.Nam
 		span.AddAttributes(attrs...)
 
 		defer func() {
-			setSpanStatus(span, err)
+			setSpanStatus(span, c.options, err)
 			span.End()
 		}()
 
@@ -257,7 +257,7 @@ func (c ocConn) Query(query string, args []driver.Value) (rows driver.Rows, err 
 		span.AddAttributes(attrs...)
 
 		defer func() {
-			setSpanStatus(span, err)
+			setSpanStatus(span, c.options, err)
 			span.End()
 		}()
 
@@ -297,7 +297,7 @@ func (c ocConn) QueryContext(ctx context.Context, query string, args []driver.Na
 		span.AddAttributes(attrs...)
 
 		defer func() {
-			setSpanStatus(span, err)
+			setSpanStatus(span, c.options, err)
 			span.End()
 		}()
 
@@ -326,7 +326,7 @@ func (c ocConn) Prepare(query string) (stmt driver.Stmt, err error) {
 		span.AddAttributes(attrs...)
 
 		defer func() {
-			setSpanStatus(span, err)
+			setSpanStatus(span, c.options, err)
 			span.End()
 		}()
 	}
@@ -359,7 +359,7 @@ func (c *ocConn) PrepareContext(ctx context.Context, query string) (stmt driver.
 			attrs = append(attrs, trace.StringAttribute("sql.query", query))
 		}
 		defer func() {
-			setSpanStatus(span, err)
+			setSpanStatus(span, c.options, err)
 			span.End()
 		}()
 	}
@@ -410,7 +410,7 @@ func (c *ocConn) BeginTx(ctx context.Context, opts driver.TxOptions) (tx driver.
 
 	if connBeginTx, ok := c.parent.(driver.ConnBeginTx); ok {
 		tx, err = connBeginTx.BeginTx(ctx, opts)
-		setSpanStatus(span, err)
+		setSpanStatus(span, c.options, err)
 		if err != nil {
 			return nil, err
 		}
@@ -425,7 +425,7 @@ func (c *ocConn) BeginTx(ctx context.Context, opts driver.TxOptions) (tx driver.
 		),
 	)
 	tx, err = c.parent.Begin()
-	setSpanStatus(span, err)
+	setSpanStatus(span, c.options, err)
 	if err != nil {
 		return nil, err
 	}
@@ -446,7 +446,7 @@ func (r ocResult) LastInsertId() (id int64, err error) {
 			span.AddAttributes(r.options.DefaultAttributes...)
 		}
 		defer func() {
-			setSpanStatus(span, err)
+			setSpanStatus(span, r.options, err)
 			span.End()
 		}()
 	}
@@ -462,7 +462,7 @@ func (r ocResult) RowsAffected() (cnt int64, err error) {
 			span.AddAttributes(r.options.DefaultAttributes...)
 		}
 		defer func() {
-			setSpanStatus(span, err)
+			setSpanStatus(span, r.options, err)
 			span.End()
 		}()
 	}
@@ -504,7 +504,7 @@ func (s ocStmt) Exec(args []driver.Value) (res driver.Result, err error) {
 	span.AddAttributes(attrs...)
 
 	defer func() {
-		setSpanStatus(span, err)
+		setSpanStatus(span, s.options, err)
 		span.End()
 	}()
 
@@ -551,7 +551,7 @@ func (s ocStmt) Query(args []driver.Value) (rows driver.Rows, err error) {
 	span.AddAttributes(attrs...)
 
 	defer func() {
-		setSpanStatus(span, err)
+		setSpanStatus(span, s.options, err)
 		span.End()
 	}()
 
@@ -588,7 +588,7 @@ func (s ocStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (res 
 	span.AddAttributes(attrs...)
 
 	defer func() {
-		setSpanStatus(span, err)
+		setSpanStatus(span, s.options, err)
 		span.End()
 	}()
 
@@ -627,7 +627,7 @@ func (s ocStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (row
 	span.AddAttributes(attrs...)
 
 	defer func() {
-		setSpanStatus(span, err)
+		setSpanStatus(span, s.options, err)
 		span.End()
 	}()
 
@@ -735,7 +735,7 @@ func (r ocRows) Close() (err error) {
 			span.AddAttributes(r.options.DefaultAttributes...)
 		}
 		defer func() {
-			setSpanStatus(span, err)
+			setSpanStatus(span, r.options, err)
 			span.End()
 		}()
 	}
@@ -753,9 +753,9 @@ func (r ocRows) Next(dest []driver.Value) (err error) {
 		defer func() {
 			if err == io.EOF {
 				// not an error; expected to happen during iteration
-				setSpanStatus(span, nil)
+				setSpanStatus(span, r.options, nil)
 			} else {
-				setSpanStatus(span, err)
+				setSpanStatus(span, r.options, err)
 			}
 			span.End()
 		}()
@@ -807,7 +807,7 @@ func (t ocTx) Commit() (err error) {
 		span.AddAttributes(t.options.DefaultAttributes...)
 	}
 	defer func() {
-		setSpanStatus(span, err)
+		setSpanStatus(span, t.options, err)
 		span.End()
 	}()
 
@@ -823,7 +823,7 @@ func (t ocTx) Rollback() (err error) {
 		span.AddAttributes(t.options.DefaultAttributes...)
 	}
 	defer func() {
-		setSpanStatus(span, err)
+		setSpanStatus(span, t.options, err)
 		span.End()
 	}()
 
@@ -878,13 +878,20 @@ func argToAttr(key string, val interface{}) trace.Attribute {
 	}
 }
 
-func setSpanStatus(span *trace.Span, err error) {
+func setSpanStatus(span *trace.Span, opts TraceOptions, err error) {
 	var status trace.Status
 	switch err {
 	case nil:
 		status.Code = trace.StatusCodeOK
 		span.SetStatus(status)
 		return
+	case driver.ErrSkip:
+		status.Code = trace.StatusCodeUnimplemented
+		if opts.DisableErrSkip {
+			// Suppress driver.ErrSkip since at runtime some drivers might not have
+			// certain features, and an error would pollute many spans.
+			status.Code = trace.StatusCodeOK
+		}
 	case context.Canceled:
 		status.Code = trace.StatusCodeCancelled
 	case context.DeadlineExceeded:
