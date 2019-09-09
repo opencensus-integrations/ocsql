@@ -19,7 +19,9 @@ var (
 // WrapConnector allows wrapping a database driver.Connector which eliminates
 // the need to register ocsql as an available driver.Driver.
 func WrapConnector(dc driver.Connector, options ...TraceOption) driver.Connector {
-	opts := TraceOptions{}
+	opts := TraceOptions{
+		InstanceName: defaultInstanceName,
+	}
 	for _, o := range options {
 		o(&opts)
 	}

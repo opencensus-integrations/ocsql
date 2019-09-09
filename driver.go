@@ -88,7 +88,9 @@ func Register(driverName string, options ...TraceOption) (string, error) {
 
 // Wrap takes a SQL driver and wraps it with OpenCensus instrumentation.
 func Wrap(d driver.Driver, options ...TraceOption) driver.Driver {
-	o := TraceOptions{}
+	o := TraceOptions{
+		InstanceName: defaultInstanceName,
+	}
 	for _, option := range options {
 		option(&o)
 	}
@@ -109,7 +111,9 @@ func (d ocDriver) Open(name string) (driver.Conn, error) {
 
 // WrapConn allows an existing driver.Conn to be wrapped by ocsql.
 func WrapConn(c driver.Conn, options ...TraceOption) driver.Conn {
-	o := TraceOptions{}
+	o := TraceOptions{
+		InstanceName: defaultInstanceName,
+	}
 	for _, option := range options {
 		option(&o)
 	}
@@ -123,7 +127,7 @@ type ocConn struct {
 }
 
 func (c ocConn) Ping(ctx context.Context) (err error) {
-	defer recordCallStats(ctx, "go.sql.ping")(err)
+	defer recordCallStats(ctx, "go.sql.ping", c.options.InstanceName)(err)
 
 	if c.options.Ping && (c.options.AllowRoot || trace.FromContext(ctx) != nil) {
 		var span *trace.Span
@@ -151,7 +155,7 @@ func (c ocConn) Ping(ctx context.Context) (err error) {
 }
 
 func (c ocConn) Exec(query string, args []driver.Value) (res driver.Result, err error) {
-	defer recordCallStats(context.Background(), "go.sql.exec")(err)
+	defer recordCallStats(context.Background(), "go.sql.exec", c.options.InstanceName)(err)
 
 	if exec, ok := c.parent.(driver.Execer); ok {
 		if !c.options.AllowRoot {
@@ -192,7 +196,7 @@ func (c ocConn) Exec(query string, args []driver.Value) (res driver.Result, err 
 }
 
 func (c ocConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (res driver.Result, err error) {
-	defer recordCallStats(ctx, "go.sql.exec")(err)
+	defer recordCallStats(ctx, "go.sql.exec", c.options.InstanceName)(err)
 
 	if execCtx, ok := c.parent.(driver.ExecerContext); ok {
 		parentSpan := trace.FromContext(ctx)
@@ -231,7 +235,7 @@ func (c ocConn) ExecContext(ctx context.Context, query string, args []driver.Nam
 }
 
 func (c ocConn) Query(query string, args []driver.Value) (rows driver.Rows, err error) {
-	defer recordCallStats(context.Background(), "go.sql.query")(err)
+	defer recordCallStats(context.Background(), "go.sql.query", c.options.InstanceName)(err)
 
 	if queryer, ok := c.parent.(driver.Queryer); ok {
 		if !c.options.AllowRoot {
@@ -273,7 +277,7 @@ func (c ocConn) Query(query string, args []driver.Value) (rows driver.Rows, err 
 }
 
 func (c ocConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (rows driver.Rows, err error) {
-	defer recordCallStats(ctx, "go.sql.query")(err)
+	defer recordCallStats(ctx, "go.sql.query", c.options.InstanceName)(err)
 
 	if queryerCtx, ok := c.parent.(driver.QueryerContext); ok {
 		parentSpan := trace.FromContext(ctx)
@@ -313,7 +317,7 @@ func (c ocConn) QueryContext(ctx context.Context, query string, args []driver.Na
 }
 
 func (c ocConn) Prepare(query string) (stmt driver.Stmt, err error) {
-	defer recordCallStats(context.Background(), "go.sql.prepare")(err)
+	defer recordCallStats(context.Background(), "go.sql.prepare", c.options.InstanceName)(err)
 
 	if c.options.AllowRoot {
 		_, span := trace.StartSpan(context.Background(), "sql:prepare", trace.WithSpanKind(trace.SpanKindClient))
@@ -349,7 +353,7 @@ func (c *ocConn) Begin() (driver.Tx, error) {
 }
 
 func (c *ocConn) PrepareContext(ctx context.Context, query string) (stmt driver.Stmt, err error) {
-	defer recordCallStats(ctx, "go.sql.prepare")(err)
+	defer recordCallStats(ctx, "go.sql.prepare", c.options.InstanceName)(err)
 
 	var span *trace.Span
 	attrs := append([]trace.Attribute(nil), c.options.DefaultAttributes...)
@@ -382,7 +386,7 @@ func (c *ocConn) PrepareContext(ctx context.Context, query string) (stmt driver.
 }
 
 func (c *ocConn) BeginTx(ctx context.Context, opts driver.TxOptions) (tx driver.Tx, err error) {
-	defer recordCallStats(ctx, "go.sql.begin")(err)
+	defer recordCallStats(ctx, "go.sql.begin", c.options.InstanceName)(err)
 
 	if !c.options.AllowRoot && trace.FromContext(ctx) == nil {
 		if connBeginTx, ok := c.parent.(driver.ConnBeginTx); ok {
@@ -479,7 +483,7 @@ type ocStmt struct {
 }
 
 func (s ocStmt) Exec(args []driver.Value) (res driver.Result, err error) {
-	defer recordCallStats(context.Background(), "go.sql.stmt.exec")(err)
+	defer recordCallStats(context.Background(), "go.sql.stmt.exec", s.options.InstanceName)(err)
 
 	if !s.options.AllowRoot {
 		return s.parent.Exec(args)
@@ -526,7 +530,7 @@ func (s ocStmt) NumInput() int {
 }
 
 func (s ocStmt) Query(args []driver.Value) (rows driver.Rows, err error) {
-	defer recordCallStats(context.Background(), "go.sql.stmt.query")(err)
+	defer recordCallStats(context.Background(), "go.sql.stmt.query", s.options.InstanceName)(err)
 
 	if !s.options.AllowRoot {
 		return s.parent.Query(args)
@@ -564,7 +568,7 @@ func (s ocStmt) Query(args []driver.Value) (rows driver.Rows, err error) {
 }
 
 func (s ocStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (res driver.Result, err error) {
-	defer recordCallStats(ctx, "go.sql.stmt.exec")(err)
+	defer recordCallStats(ctx, "go.sql.stmt.exec", s.options.InstanceName)(err)
 
 	parentSpan := trace.FromContext(ctx)
 	if !s.options.AllowRoot && parentSpan == nil {
@@ -603,7 +607,7 @@ func (s ocStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (res 
 }
 
 func (s ocStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (rows driver.Rows, err error) {
-	defer recordCallStats(ctx, "go.sql.stmt.query")(err)
+	defer recordCallStats(ctx, "go.sql.stmt.query", s.options.InstanceName)(err)
 
 	parentSpan := trace.FromContext(ctx)
 	if !s.options.AllowRoot && parentSpan == nil {
@@ -800,7 +804,7 @@ type ocTx struct {
 }
 
 func (t ocTx) Commit() (err error) {
-	defer recordCallStats(context.Background(), "go.sql.commit")(err)
+	defer recordCallStats(context.Background(), "go.sql.commit", t.options.InstanceName)(err)
 
 	_, span := trace.StartSpan(t.ctx, "sql:commit", trace.WithSpanKind(trace.SpanKindClient))
 	if len(t.options.DefaultAttributes) > 0 {
@@ -816,7 +820,7 @@ func (t ocTx) Commit() (err error) {
 }
 
 func (t ocTx) Rollback() (err error) {
-	defer recordCallStats(context.Background(), "go.sql.rollback")(err)
+	defer recordCallStats(context.Background(), "go.sql.rollback", t.options.InstanceName)(err)
 
 	_, span := trace.StartSpan(t.ctx, "sql:rollback", trace.WithSpanKind(trace.SpanKindClient))
 	if len(t.options.DefaultAttributes) > 0 {

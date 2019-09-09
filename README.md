@@ -32,7 +32,7 @@ var (
 )
 
 // Register our ocsql wrapper for the provided SQLite3 driver.
-driverName, err = ocsql.Register("sqlite3", ocsql.WithAllTraceOptions())
+driverName, err = ocsql.Register("sqlite3", ocsql.WithAllTraceOptions(), ocsql.WithInstanceName("resources"))
 if err != nil {
     log.Fatalf("unable to register our ocsql driver: %v\n", err)
 }

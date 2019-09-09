@@ -7,6 +7,8 @@ import (
 // TraceOption allows for managing ocsql configuration using functional options.
 type TraceOption func(o *TraceOptions)
 
+const defaultInstanceName = "default"
+
 // TraceOptions holds configuration of our ocsql tracing middleware.
 // By default all options are set to false intentionally when creating a wrapped
 // driver and provide the most sensible default with both performance and
@@ -50,6 +52,9 @@ type TraceOptions struct {
 
 	// DefaultAttributes will be set to each span as default.
 	DefaultAttributes []trace.Attribute
+
+	// InstanceName identifies database.
+	InstanceName string
 
 	// DisableErrSkip, if set to true, will suppress driver.ErrSkip errors in spans.
 	DisableErrSkip bool
@@ -164,5 +169,12 @@ func WithDefaultAttributes(attrs ...trace.Attribute) TraceOption {
 func WithDisableErrSkip(b bool) TraceOption {
 	return func(o *TraceOptions) {
 		o.DisableErrSkip = b
+	}
+}
+
+// WithInstanceName sets database instance name.
+func WithInstanceName(instanceName string) TraceOption {
+	return func(o *TraceOptions) {
+		o.InstanceName = instanceName
 	}
 }

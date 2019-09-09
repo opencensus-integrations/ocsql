@@ -11,6 +11,8 @@ import (
 
 // The following tags are applied to stats recorded by this package.
 var (
+	// GoSQLInstance is the SQL instance name.
+	GoSQLInstance, _ = tag.NewKey("go_sql_instance")
 	// GoSQLMethod is the SQL method called.
 	GoSQLMethod, _ = tag.NewKey("go_sql_method")
 	// GoSQLError is the error received while calling a SQL method.
@@ -79,7 +81,7 @@ var (
 		Description: "The distribution of latencies of various calls in milliseconds",
 		Measure:     MeasureLatencyMs,
 		Aggregation: DefaultMillisecondsDistribution,
-		TagKeys:     []tag.Key{GoSQLMethod, GoSQLError, GoSQLStatus},
+		TagKeys:     []tag.Key{GoSQLInstance, GoSQLMethod, GoSQLError, GoSQLStatus},
 	}
 
 	SQLClientCallsView = &view.View{
@@ -87,7 +89,7 @@ var (
 		Description: "The number of various calls of methods",
 		Measure:     MeasureLatencyMs,
 		Aggregation: view.Count(),
-		TagKeys:     []tag.Key{GoSQLMethod, GoSQLError, GoSQLStatus},
+		TagKeys:     []tag.Key{GoSQLInstance, GoSQLMethod, GoSQLError, GoSQLStatus},
 	}
 
 	SQLClientOpenConnectionsView = &view.View{
@@ -95,6 +97,7 @@ var (
 		Description: "The number of open connections",
 		Measure:     MeasureOpenConnections,
 		Aggregation: view.LastValue(),
+		TagKeys:     []tag.Key{GoSQLInstance},
 	}
 
 	SQLClientIdleConnectionsView = &view.View{
@@ -102,6 +105,7 @@ var (
 		Description: "The number of idle connections",
 		Measure:     MeasureIdleConnections,
 		Aggregation: view.LastValue(),
+		TagKeys:     []tag.Key{GoSQLInstance},
 	}
 
 	SQLClientActiveConnectionsView = &view.View{
@@ -109,6 +113,7 @@ var (
 		Description: "The number of active connections",
 		Measure:     MeasureActiveConnections,
 		Aggregation: view.LastValue(),
+		TagKeys:     []tag.Key{GoSQLInstance},
 	}
 
 	SQLClientWaitCountView = &view.View{
@@ -116,6 +121,7 @@ var (
 		Description: "The total number of connections waited for",
 		Measure:     MeasureWaitCount,
 		Aggregation: view.LastValue(),
+		TagKeys:     []tag.Key{GoSQLInstance},
 	}
 
 	SQLClientWaitDurationView = &view.View{
@@ -123,6 +129,7 @@ var (
 		Description: "The total time blocked waiting for a new connection",
 		Measure:     MeasureWaitDuration,
 		Aggregation: view.LastValue(),
+		TagKeys:     []tag.Key{GoSQLInstance},
 	}
 
 	SQLClientIdleClosedView = &view.View{
@@ -130,6 +137,7 @@ var (
 		Description: "The total number of connections closed due to SetMaxIdleConns",
 		Measure:     MeasureIdleClosed,
 		Aggregation: view.LastValue(),
+		TagKeys:     []tag.Key{GoSQLInstance},
 	}
 
 	SQLClientLifetimeClosedView = &view.View{
@@ -137,6 +145,7 @@ var (
 		Description: "The total number of connections closed due to SetConnMaxLifetime",
 		Measure:     MeasureLifetimeClosed,
 		Aggregation: view.LastValue(),
+		TagKeys:     []tag.Key{GoSQLInstance},
 	}
 
 	DefaultViews = []*view.View{
@@ -154,7 +163,7 @@ func RegisterAllViews() {
 	}
 }
 
-func recordCallStats(ctx context.Context, method string) func(err error) {
+func recordCallStats(ctx context.Context, method, instanceName string) func(err error) {
 	var tags []tag.Mutator
 	startTime := time.Now()
 
@@ -163,11 +172,14 @@ func recordCallStats(ctx context.Context, method string) func(err error) {
 
 		if err != nil {
 			tags = []tag.Mutator{
-				tag.Insert(GoSQLMethod, method), valueErr, tag.Insert(GoSQLError, err.Error()),
+				tag.Insert(GoSQLMethod, method),
+				valueErr,
+				tag.Insert(GoSQLError, err.Error()),
+				tag.Insert(GoSQLInstance, instanceName),
 			}
 		} else {
 			tags = []tag.Mutator{
-				tag.Insert(GoSQLMethod, method), valueOK,
+				tag.Insert(GoSQLMethod, method), valueOK, tag.Insert(GoSQLInstance, instanceName),
 			}
 		}
 
