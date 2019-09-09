@@ -6,6 +6,8 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+
+	"go.opencensus.io/trace"
 )
 
 var errConnDone = sql.ErrConnDone
@@ -25,6 +27,10 @@ func WrapConnector(dc driver.Connector, options ...TraceOption) driver.Connector
 	for _, o := range options {
 		o(&opts)
 	}
+	opts.DefaultAttributes = append(
+		opts.DefaultAttributes,
+		trace.StringAttribute("sql.instance", opts.InstanceName),
+	)
 
 	return &ocDriver{
 		parent:    dc.Driver(),

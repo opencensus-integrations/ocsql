@@ -94,6 +94,7 @@ func Wrap(d driver.Driver, options ...TraceOption) driver.Driver {
 	for _, option := range options {
 		option(&o)
 	}
+	o.DefaultAttributes = append(o.DefaultAttributes, trace.StringAttribute("sql.instance", o.InstanceName))
 	if o.QueryParams && !o.Query {
 		o.QueryParams = false
 	}
@@ -117,6 +118,7 @@ func WrapConn(c driver.Conn, options ...TraceOption) driver.Conn {
 	for _, option := range options {
 		option(&o)
 	}
+	o.DefaultAttributes = append(o.DefaultAttributes, trace.StringAttribute("sql.instance", o.InstanceName))
 	return wrapConn(c, o)
 }
 
