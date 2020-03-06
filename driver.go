@@ -88,13 +88,15 @@ func Register(driverName string, options ...TraceOption) (string, error) {
 
 // Wrap takes a SQL driver and wraps it with OpenCensus instrumentation.
 func Wrap(d driver.Driver, options ...TraceOption) driver.Driver {
-	o := TraceOptions{
-		InstanceName: defaultInstanceName,
-	}
+	o := TraceOptions{}
 	for _, option := range options {
 		option(&o)
 	}
-	o.DefaultAttributes = append(o.DefaultAttributes, trace.StringAttribute("sql.instance", o.InstanceName))
+	if o.InstanceName == "" {
+		o.InstanceName = defaultInstanceName
+	} else {
+		o.DefaultAttributes = append(o.DefaultAttributes, trace.StringAttribute("sql.instance", o.InstanceName))
+	}
 	if o.QueryParams && !o.Query {
 		o.QueryParams = false
 	}
@@ -112,13 +114,15 @@ func (d ocDriver) Open(name string) (driver.Conn, error) {
 
 // WrapConn allows an existing driver.Conn to be wrapped by ocsql.
 func WrapConn(c driver.Conn, options ...TraceOption) driver.Conn {
-	o := TraceOptions{
-		InstanceName: defaultInstanceName,
-	}
+	o := TraceOptions{}
 	for _, option := range options {
 		option(&o)
 	}
-	o.DefaultAttributes = append(o.DefaultAttributes, trace.StringAttribute("sql.instance", o.InstanceName))
+	if o.InstanceName == "" {
+		o.InstanceName = defaultInstanceName
+	} else {
+		o.DefaultAttributes = append(o.DefaultAttributes, trace.StringAttribute("sql.instance", o.InstanceName))
+	}
 	return wrapConn(c, o)
 }
 
