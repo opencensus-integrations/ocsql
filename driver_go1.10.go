@@ -21,21 +21,20 @@ var (
 // WrapConnector allows wrapping a database driver.Connector which eliminates
 // the need to register ocsql as an available driver.Driver.
 func WrapConnector(dc driver.Connector, options ...TraceOption) driver.Connector {
-	opts := TraceOptions{
-		InstanceName: defaultInstanceName,
+	o := TraceOptions{}
+	for _, option := range options {
+		option(&o)
 	}
-	for _, o := range options {
-		o(&opts)
+	if o.InstanceName == "" {
+		o.InstanceName = defaultInstanceName
+	} else {
+		o.DefaultAttributes = append(o.DefaultAttributes, trace.StringAttribute("sql.instance", o.InstanceName))
 	}
-	opts.DefaultAttributes = append(
-		opts.DefaultAttributes,
-		trace.StringAttribute("sql.instance", opts.InstanceName),
-	)
 
 	return &ocDriver{
 		parent:    dc.Driver(),
 		connector: dc,
-		options:   opts,
+		options:   o,
 	}
 }
 
