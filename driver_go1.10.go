@@ -6,6 +6,8 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+
+	"go.opencensus.io/trace"
 )
 
 var errConnDone = sql.ErrConnDone
@@ -19,15 +21,20 @@ var (
 // WrapConnector allows wrapping a database driver.Connector which eliminates
 // the need to register ocsql as an available driver.Driver.
 func WrapConnector(dc driver.Connector, options ...TraceOption) driver.Connector {
-	opts := TraceOptions{}
-	for _, o := range options {
-		o(&opts)
+	o := TraceOptions{}
+	for _, option := range options {
+		option(&o)
+	}
+	if o.InstanceName == "" {
+		o.InstanceName = defaultInstanceName
+	} else {
+		o.DefaultAttributes = append(o.DefaultAttributes, trace.StringAttribute("sql.instance", o.InstanceName))
 	}
 
 	return &ocDriver{
 		parent:    dc.Driver(),
 		connector: dc,
-		options:   opts,
+		options:   o,
 	}
 }
 
