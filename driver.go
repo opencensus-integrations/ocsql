@@ -33,6 +33,7 @@ var (
 	// Compile time assertions
 	_ driver.Driver                         = &ocDriver{}
 	_ conn                                  = &ocConn{}
+	_ driver.NamedValueChecker              = &ocConn{}
 	_ driver.Result                         = &ocResult{}
 	_ driver.Stmt                           = &ocStmt{}
 	_ driver.StmtExecContext                = &ocStmt{}
@@ -513,6 +514,15 @@ func (c *ocConn) BeginTx(ctx context.Context, opts driver.TxOptions) (tx driver.
 		return nil, err
 	}
 	return ocTx{parent: tx, ctx: ctx, options: c.options}, nil
+}
+
+func (c *ocConn) CheckNamedValue(nv *driver.NamedValue) error {
+	nvc, ok := c.parent.(driver.NamedValueChecker)
+	if ok {
+		return nvc.CheckNamedValue(nv)
+	}
+	_, err := driver.DefaultParameterConverter.ConvertValue(nv.Value)
+	return err
 }
 
 // ocResult implements driver.Result
