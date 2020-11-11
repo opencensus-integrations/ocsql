@@ -516,12 +516,12 @@ func (c *ocConn) BeginTx(ctx context.Context, opts driver.TxOptions) (tx driver.
 	return ocTx{parent: tx, ctx: ctx, options: c.options}, nil
 }
 
-func (c *ocConn) CheckNamedValue(nv *driver.NamedValue) error {
+func (c *ocConn) CheckNamedValue(nv *driver.NamedValue) (err error) {
 	nvc, ok := c.parent.(driver.NamedValueChecker)
 	if ok {
 		return nvc.CheckNamedValue(nv)
 	}
-	_, err := driver.DefaultParameterConverter.ConvertValue(nv.Value)
+	nv.Value, err = driver.DefaultParameterConverter.ConvertValue(nv.Value)
 	return err
 }
 
