@@ -52,8 +52,18 @@ var (
 // It is possible to register multiple wrappers for the same database driver if
 // needing different TraceOptions for different connections.
 func Register(driverName string, options ...TraceOption) (string, error) {
+	return RegisterWithSource(driverName, "", options...)
+}
+
+// RegisterWithSource initializes and registers our ocsql wrapped database driver
+// identified by its driverName, using provided TraceOptions.
+// source is useful if some drivers do not accept the empty string when opening the DB.
+// On success it returns the generated driverName to use when calling sql.Open.
+// It is possible to register multiple wrappers for the same database driver if
+// needing different TraceOptions for different connections.
+func RegisterWithSource(driverName string, source string, options ...TraceOption) (string, error) {
 	// retrieve the driver implementation we need to wrap with instrumentation
-	db, err := sql.Open(driverName, "")
+	db, err := sql.Open(driverName, source)
 	if err != nil {
 		return "", err
 	}
